@@ -8,6 +8,11 @@ export type Note = {
   updatedAt?: string
   scheduledDate?: string
   done: boolean
+  deletedAt?: string
+}
+
+export type NoteDraft = Pick<Note, 'content' | 'status' | 'scheduledDate'> & {
+  savedAt: string
 }
 
 export type Transaction = {

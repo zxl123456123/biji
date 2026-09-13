@@ -1,7 +1,8 @@
-import type { AppData, Note, Transaction } from './types'
+import type { AppData, Note, NoteDraft, Transaction } from './types'
 
 const NOTES_KEY = 'luma-notes-v1'
 const TRANSACTIONS_KEY = 'luma-transactions-v1'
+const DRAFT_PREFIX = 'luma-note-draft-v1:'
 
 const sampleNotes: Note[] = [
   { id: 'welcome-1', content: '欢迎来到晴笺。按 <kbd>⌘</kbd> <kbd>Enter</kbd> 随时记下一件事。', status: 'today', createdAt: new Date().toISOString(), done: false },
@@ -19,6 +20,11 @@ export function loadNotes(): Note[] {
   }))
 }
 export function saveNotes(notes: Note[]) { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)) }
+export function loadNoteDraft(id = 'new'): NoteDraft | null {
+  try { const value = JSON.parse(localStorage.getItem(`${DRAFT_PREFIX}${id}`) ?? 'null'); return value && typeof value.content === 'string' ? value as NoteDraft : null } catch { return null }
+}
+export function saveNoteDraft(draft: NoteDraft, id = 'new') { localStorage.setItem(`${DRAFT_PREFIX}${id}`, JSON.stringify(draft)) }
+export function clearNoteDraft(id = 'new') { localStorage.removeItem(`${DRAFT_PREFIX}${id}`) }
 export function loadTransactions(): Transaction[] {
   const saved = localStorage.getItem(TRANSACTIONS_KEY)
   return saved ? JSON.parse(saved) : []

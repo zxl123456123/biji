@@ -1,15 +1,17 @@
 {
   "name": "luma-notes",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check": "npm run build && cargo check --manifest-path src-tauri/Cargo.toml",
     "preview": "vite preview",
     "tauri": "tauri",
     "desktop": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build",
+    "release:windows": "tauri build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

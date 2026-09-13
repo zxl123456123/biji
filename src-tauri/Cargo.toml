@@ -1,6 +1,6 @@
 [package]
 name = "qingjian"
-version = "0.2.0"
+version = "0.3.0"
 description = "晴笺 · 本地优先的笔记与生活账本"
 authors = ["ZXL"]
 edition = "2021"

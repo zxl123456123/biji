@@ -11,7 +11,7 @@ const API_URL: &str = "https://api.deepseek.com/chat/completions";
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct Note { id: String, content: String, status: String, created_at: String, updated_at: Option<String>, scheduled_date: Option<String>, done: bool }
+struct Note { id: String, content: String, status: String, created_at: String, updated_at: Option<String>, scheduled_date: Option<String>, done: bool, #[serde(default)] deleted_at: Option<String> }
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Transaction { id: String, amount: f64, category: String, note: String, kind: String, created_at: String, updated_at: Option<String> }
@@ -30,17 +30,19 @@ fn database_path(app: &AppHandle) -> Result<PathBuf, String> {
 fn connection(app: &AppHandle) -> Result<Connection, String> {
   let conn = Connection::open(database_path(app)?).map_err(|e| e.to_string())?;
   conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-    CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, content TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT, scheduled_date TEXT, done INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, content TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT, scheduled_date TEXT, done INTEGER NOT NULL, deleted_at TEXT);
     CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY, amount REAL NOT NULL, category TEXT NOT NULL, note TEXT NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT);")
     .map_err(|e| e.to_string())?;
+  let has_deleted_at: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name='deleted_at'", [], |r| r.get(0)).map_err(|e| e.to_string())?;
+  if has_deleted_at == 0 { conn.execute("ALTER TABLE notes ADD COLUMN deleted_at TEXT", []).map_err(|e| e.to_string())?; }
   Ok(conn)
 }
 
 #[tauri::command]
 fn load_data(app: AppHandle) -> Result<AppData, String> {
   let conn = connection(&app)?;
-  let mut notes_stmt = conn.prepare("SELECT id, content, status, created_at, updated_at, scheduled_date, done FROM notes ORDER BY created_at DESC").map_err(|e| e.to_string())?;
-  let notes = notes_stmt.query_map([], |r| Ok(Note { id:r.get(0)?, content:r.get(1)?, status:r.get(2)?, created_at:r.get(3)?, updated_at:r.get(4)?, scheduled_date:r.get(5)?, done:r.get::<_, i64>(6)? != 0 })).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
+  let mut notes_stmt = conn.prepare("SELECT id, content, status, created_at, updated_at, scheduled_date, done, deleted_at FROM notes ORDER BY created_at DESC").map_err(|e| e.to_string())?;
+  let notes = notes_stmt.query_map([], |r| Ok(Note { id:r.get(0)?, content:r.get(1)?, status:r.get(2)?, created_at:r.get(3)?, updated_at:r.get(4)?, scheduled_date:r.get(5)?, done:r.get::<_, i64>(6)? != 0, deleted_at:r.get(7)? })).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
   let mut tx_stmt = conn.prepare("SELECT id, amount, category, note, kind, created_at, updated_at FROM transactions ORDER BY created_at DESC").map_err(|e| e.to_string())?;
   let transactions = tx_stmt.query_map([], |r| Ok(Transaction { id:r.get(0)?, amount:r.get(1)?, category:r.get(2)?, note:r.get(3)?, kind:r.get(4)?, created_at:r.get(5)?, updated_at:r.get(6)? })).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
   Ok(AppData { notes, transactions })
@@ -52,7 +54,7 @@ fn save_data(app: AppHandle, data: AppData) -> Result<(), String> {
   let tx = conn.transaction().map_err(|e| e.to_string())?;
   tx.execute("DELETE FROM notes", []).map_err(|e| e.to_string())?;
   tx.execute("DELETE FROM transactions", []).map_err(|e| e.to_string())?;
-  for n in data.notes { tx.execute("INSERT INTO notes VALUES (?1,?2,?3,?4,?5,?6,?7)", params![n.id,n.content,n.status,n.created_at,n.updated_at,n.scheduled_date,n.done as i64]).map_err(|e| e.to_string())?; }
+  for n in data.notes { tx.execute("INSERT INTO notes (id,content,status,created_at,updated_at,scheduled_date,done,deleted_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)", params![n.id,n.content,n.status,n.created_at,n.updated_at,n.scheduled_date,n.done as i64,n.deleted_at]).map_err(|e| e.to_string())?; }
   for t in data.transactions { tx.execute("INSERT INTO transactions VALUES (?1,?2,?3,?4,?5,?6,?7)", params![t.id,t.amount,t.category,t.note,t.kind,t.created_at,t.updated_at]).map_err(|e| e.to_string())?; }
   tx.commit().map_err(|e| e.to_string())
 }
