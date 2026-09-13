@@ -9,6 +9,14 @@ npm run check
 
 `npm run check` 会执行 TypeScript 构建、Vite 正式构建和 Rust 编译检查。开发预览使用 `npm run dev`，桌面联调使用 `npm run desktop`。
 
+Rust 测试命令：
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+截至 0.3.0，该命令可以成功执行，但项目尚无实际 Rust 测试用例；“0 个测试通过”不等同于数据迁移已被自动化覆盖。
+
 ## 里程碑人工验收
 
 1. 新建记录，输入内容后直接关闭，再次新建时应恢复草稿。
@@ -38,3 +46,16 @@ npm run release:windows
 
 当前版本为 0.3.0。NSIS 首次构建需要从 Tauri 官方发布源下载打包组件，网络不稳定时可重试；MSI 与程序本体不受影响。
 
+只验证 MSI、跳过 NSIS 组件下载时使用：
+
+```powershell
+npm run desktop:build -- --bundles msi
+```
+
+## 0.3.0 验证记录
+
+- ✅ `npm ci`
+- ✅ `npm run check`
+- ✅ `cargo test --manifest-path src-tauri/Cargo.toml`（0 个测试用例）
+- ✅ `npm run desktop:build -- --bundles msi`
+- ⛔ 完整 `npm run release:windows`：NSIS 官方组件下载超时，MSI 不受影响
