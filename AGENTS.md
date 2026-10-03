@@ -26,6 +26,7 @@
 - `docs/Project.Progress.md`：当前完成状态、验证结果和下一阶段。
 - `docs/Release.Testing.md`：测试指令、人工验收清单与 Windows 发布节奏。
 - `docs/Product.Direction.md`：市场对齐结论与晴笺产品边界。
+- `docs/Record.Garden.md`：独立记录时光、日期口径、像素伙伴与 Cinema 4D 模型路线。
 - `docs/Docs.Maintenance.Conventions.md`：文档维护与归档规范。
 - `CHANGELOG.md`：版本级变更记录。
 

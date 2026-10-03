@@ -1,0 +1,63 @@
+.rg-page {
+  --rg-surface: var(--surface, #fffefa); --rg-soft: var(--soft, #f2eff7);
+  --rg-text: var(--text, #343347); --rg-muted: var(--muted, #696779);
+  --rg-line: var(--line, #e1dfeb); --rg-accent: var(--accent, #7258a6);
+  --rg-accent-soft: var(--accent-soft, #eee8fa);
+  max-width: 1220px; margin: 0 auto; padding: 40px 40px 64px; color: var(--rg-text);
+}
+:root[data-theme='dark'] .rg-page {
+  --rg-surface: var(--surface, #292734); --rg-soft: var(--soft, #353240);
+  --rg-text: var(--text, #eeebfa); --rg-muted: var(--muted, #bbb5cd);
+  --rg-line: var(--line, #4b465b); --rg-accent: var(--accent, #c3a8f6);
+  --rg-accent-soft: var(--accent-soft, #41334f);
+}
+.rg-page button:focus-visible { outline: 2px solid var(--rg-accent); outline-offset: 3px; }
+.rg-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 28px; }
+.rg-heading h1 { margin: 8px 0; font-size: 30px; letter-spacing: .04em; color: var(--rg-text); }
+.rg-heading p { margin: 0; color: var(--rg-muted); font-size: 13px; line-height: 1.7; }
+.rg-heading .rg-eyebrow { font-size: 11px; letter-spacing: .16em; color: var(--rg-accent); }
+.rg-button, .rg-icon { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; border: 1px solid var(--rg-line); border-radius: 12px; padding: 8px 13px; background: var(--rg-surface); color: var(--rg-text); font-size: 12px !important; }
+.rg-button:hover, .rg-icon:hover { background: var(--rg-soft); }
+.rg-primary { background: var(--rg-accent); color: var(--rg-surface); border-color: transparent; }
+.rg-primary:hover { background: var(--rg-accent); filter: brightness(1.08); }
+.rg-icon { width: 40px; padding: 0; }
+.rg-icon:disabled { opacity: .5; cursor: default; }
+.rg-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.rg-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--rg-line); background: var(--rg-soft); border-radius: 13px; }
+.rg-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 11px; border-radius: 9px; background: transparent; color: var(--rg-muted); font-size: 12px; }
+.rg-tabs button[aria-pressed='true'] { background: var(--rg-surface); color: var(--rg-accent); box-shadow: 0 2px 6px #34234c09; }
+.rg-basis-note { color: var(--rg-muted); font-size: 12px; line-height: 1.7; margin: 13px 0 22px; }
+.rg-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); align-items: start; gap: 22px; }
+.rg-calendar-panel, .rg-records { padding: 22px; border: 1px solid var(--rg-line); border-radius: 22px; background: var(--rg-surface); min-width: 0; }
+.rg-month-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.rg-month-nav h2 { font-size: 19px; margin: 0 0 8px; }
+.rg-month-nav p { color: var(--rg-muted); font-size: 11px; margin: 0; line-height: 1.7; }
+.rg-month-nav strong { color: var(--rg-text); font-weight: 600; }
+.rg-month-nav > div:last-child { display: flex; gap: 5px; }
+.rg-spatial-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.rg-spatial-controls > span { color: var(--rg-muted); font-size: 11px; line-height: 1.6; }
+.rg-calendar-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rg-line); color: var(--rg-muted); font-size: 10px; }
+.rg-motion-toggle, .rg-undated { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; color: var(--rg-muted); background: transparent; padding: 5px 0; font-size: 11px !important; }
+.rg-undated { margin-left: auto; color: var(--rg-accent); }
+.rg-detail-panel { display: grid; gap: 18px; min-width: 0; }
+.rg-records > header { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 17px; }
+.rg-records header p { margin: 0 0 7px; color: var(--rg-accent); font-size: 10px; }
+.rg-records h2 { margin: 0; font-size: 14px; line-height: 1.6; }
+.rg-records header > span { flex-shrink: 0; color: var(--rg-muted); font-size: 11px; padding-top: 4px; }
+.rg-record { padding: 14px 0; border-top: 1px solid var(--rg-line); }
+.rg-record-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 10px; color: var(--rg-muted); }
+.rg-record-status button { min-height: 32px; border-radius: 8px; padding: 4px 8px; color: var(--rg-accent); background: var(--rg-accent-soft); font-size: 11px; }
+.rg-record-body { margin-top: 10px; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; color: var(--rg-text); }
+.rg-record-body p { white-space: pre-wrap; margin: 5px 0; }
+.rg-record-body h2, .rg-record-body h3 { font-size: 16px; margin: 8px 0; }
+.rg-record-body pre { max-width: 100%; overflow: auto; padding: 10px; border-radius: 9px; background: var(--rg-soft); white-space: pre; }
+.rg-record-body code { font-family: Consolas, monospace; }
+.rg-record-body blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--rg-line); }
+.rg-empty { display: grid; justify-items: center; gap: 8px; padding: 24px 0; text-align: center; color: var(--rg-muted); }
+.rg-empty svg { color: var(--rg-accent); opacity: .6; }
+.rg-empty p { margin: 6px 0; font-size: 13px; }
+.rg-empty span { font-size: 11px; line-height: 1.7; }
+.rg-empty button { margin-top: 10px; }
+.rg-more { width: 100%; margin-top: 12px; }
+@media (max-width: 1100px) { .rg-page { padding: 30px 24px 48px; } .rg-layout { grid-template-columns: 1fr; } .rg-detail-panel { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); align-items: start; } }
+@media (max-width: 650px) { .rg-page { padding: 24px 14px 40px; } .rg-heading { align-items: start; } .rg-heading h1 { font-size: 25px; } .rg-heading > button { max-width: 112px; white-space: normal; } .rg-toolbar { gap: 10px; } .rg-calendar-panel, .rg-records { padding: 15px; border-radius: 17px; } .rg-detail-panel { grid-template-columns: 1fr; } .rg-month-nav h2 { font-size: 17px; } .rg-month-nav { gap: 5px; } .rg-month-nav .rg-button { padding: 6px 9px; } .rg-month-nav .rg-icon { width: 34px; } }

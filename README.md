@@ -43,6 +43,21 @@ npm run check
 - 所见即所得编辑器：标题、粗体、斜体、颜色和字号会在输入时直接呈现
 - 年/月/日三列滚轮式日期选择器
 
+## 记录时光（独立功能分支）
+
+`codex/record-garden` 新增月历、热力格与 CSS 立体记录柱；点日期查看完整排版与当前完成状态，可继续打开原编辑器。同一天超过 30 条时逐批加载，统计始终包含全部有效记录。
+
+默认按本机创建日期统计，可切到用户指定的记录日期；修改时间不计为每日写作历史。回收站记录不参与，无法识别日期的记录仍有入口。像素机器人提供选日摘要、写记录与回今天，可隐藏；动态可暂停并跟随系统减少动态效果。
+
+本分支从已提交的 0.3.0 基线开发，未合并到另一会话的 0.5.3 主目录，也未发布新 Windows 安装器。使用 `npm run dev -- --port 1436` 可独立预览。日期模型验证：
+
+```bash
+node --experimental-strip-types --test tests/recordGarden.test.mjs
+npm run build
+```
+
+需要 Node.js 22.18 或更高版本。[功能、GitHub 参考与 Cinema 4D 路线](docs/Record.Garden.md)说明当前范围，[接入说明](docs/current/record-garden/integration.md)用于后续协调主目录。
+
 ## 原生端与 AI
 
 桌面端使用 Tauri 2 + SQLite（WAL 模式）存储数据，数据库位于应用数据目录。AI 功能使用官方 `deepseek-flash` 模型，即 DeepSeek V4.1-Flash；模型名和 API 地址不会放在前端。
