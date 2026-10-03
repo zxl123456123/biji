@@ -1,0 +1,81 @@
+.rg-companion-card {
+  --rg-companion-text: #403d49;
+  --rg-companion-muted: #777181;
+  --rg-companion-border: #e4ddea;
+  --rg-companion-surface: #f7f4fb;
+  --rg-companion-accent: #655797;
+  --rg-companion-accent-hover: #544785;
+  --rg-companion-soft: #eae4f5;
+  --rg-companion-shell: #d2e2de;
+  --rg-companion-outline: #718d91;
+  --rg-companion-metal: #97b2b4;
+  --rg-companion-screen: #365860;
+  --rg-companion-eye: #d4f0dc;
+  --rg-companion-light: #e4b973;
+  --rg-companion-cheek: #c69697;
+  padding: 16px;
+  color: var(--rg-companion-text);
+  background: var(--rg-companion-surface);
+  border: 1px solid var(--rg-companion-border);
+  border-radius: 18px;
+}
+
+.rg-companion-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rg-companion-name { font-size: 12px; font-weight: 600; }
+.rg-companion-toggle { min-height: 32px; padding: 4px 7px; color: var(--rg-companion-muted); background: transparent; border-radius: 8px; font-size: 11px; white-space: nowrap; }
+.rg-companion-toggle:hover { color: var(--rg-companion-accent); background: var(--rg-companion-soft); }
+.rg-companion-body { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 12px; padding-top: 14px; }
+.rg-companion-body[hidden] { display: none; }
+.rg-companion-figure { display: grid; place-items: center; width: 78px; height: 86px; background: var(--rg-companion-soft); border-radius: 14px; }
+.rg-companion-robot { display: block; width: 64px; height: 72px; }
+.rg-companion-shell { fill: var(--rg-companion-shell); }
+.rg-companion-outline { fill: var(--rg-companion-outline); }
+.rg-companion-metal { fill: var(--rg-companion-metal); }
+.rg-companion-screen { fill: var(--rg-companion-screen); }
+.rg-companion-eye { fill: var(--rg-companion-eye); }
+.rg-companion-light { fill: var(--rg-companion-light); }
+.rg-companion-cheek { fill: var(--rg-companion-cheek); }
+.rg-companion-date { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.rg-companion-summary { margin: 5px 0 0; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.rg-companion-note { margin: 4px 0 0; color: var(--rg-companion-muted); font-size: 11px; line-height: 1.7; }
+.rg-companion-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.rg-companion-create, .rg-companion-today { min-height: 36px; padding: 8px 12px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.rg-companion-create { color: #fff; background: var(--rg-companion-accent); }
+.rg-companion-create:hover { background: var(--rg-companion-accent-hover); }
+.rg-companion-today { color: var(--rg-companion-accent); background: var(--rg-companion-soft); }
+.rg-companion-today:hover { box-shadow: inset 0 0 0 1px var(--rg-companion-accent); }
+.rg-companion-toggle:focus-visible, .rg-companion-create:focus-visible, .rg-companion-today:focus-visible { outline: 2px solid var(--rg-companion-accent); outline-offset: 3px; }
+.rg-companion-card[data-animate='true'] .rg-companion-eyes { transform-box: fill-box; transform-origin: center; animation: rg-companion-blink 8s steps(1, end) infinite; }
+
+@keyframes rg-companion-blink {
+  0%, 96%, 100% { transform: scaleY(1); }
+  97%, 99% { transform: scaleY(.1); }
+}
+
+:root[data-theme='dark'] .rg-companion-card {
+  --rg-companion-text: #ece5f0;
+  --rg-companion-muted: #bbb1c5;
+  --rg-companion-border: #4b4259;
+  --rg-companion-surface: #302a3a;
+  --rg-companion-accent: #cec0ef;
+  --rg-companion-accent-hover: #bbaaeb;
+  --rg-companion-soft: #443a53;
+  --rg-companion-shell: #b7d1cb;
+  --rg-companion-outline: #718f94;
+  --rg-companion-metal: #8bafb2;
+  --rg-companion-light: #efc17c;
+}
+
+:root[data-theme='dark'] .rg-companion-create { color: #2b223b; }
+
+@media (max-width: 390px) {
+  .rg-companion-card { padding: 13px; }
+  .rg-companion-header { gap: 6px; }
+  .rg-companion-body { grid-template-columns: 64px minmax(0, 1fr); gap: 10px; }
+  .rg-companion-figure { width: 64px; height: 76px; }
+  .rg-companion-robot { width: 56px; height: 63px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rg-companion-card[data-animate='true'] .rg-companion-eyes { animation: none; }
+}
