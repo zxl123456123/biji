@@ -22,7 +22,7 @@ export function buildRecordGardenModel(notes: readonly Note[], basis: RecordDate
   for (const note of notes) {
     if (note.deletedAt) continue
     // Date parsing can normalize an impossible ISO calendar date into another day.
-    const civilDate = /^\d{4}-\d{2}-\d{2}(?=T|\s|$)/.exec(note.createdAt.trim())?.[0]
+    const civilDate = /^\d{4}-\d{2}-\d{2}(?=T|\s|$)/i.exec(note.createdAt.trim())?.[0]
     let key = civilDate && !validDateKey(civilDate) ? '' : localDateKey(new Date(note.createdAt))
     // An explicit invalid record date stays undated instead of falling back.
     if (basis === 'record' && note.scheduledDate) key = validDateKey(note.scheduledDate) ? note.scheduledDate : ''

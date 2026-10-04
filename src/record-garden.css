@@ -44,6 +44,7 @@
 .rg-records header p { margin: 0 0 7px; color: var(--rg-accent); font-size: 10px; }
 .rg-records h2 { margin: 0; font-size: 14px; line-height: 1.6; }
 .rg-records header > span { flex-shrink: 0; color: var(--rg-muted); font-size: 11px; padding-top: 4px; }
+.rg-list-status { margin: 0 0 14px; color: var(--rg-muted); font-size: 11px; line-height: 1.7; }
 .rg-record { padding: 14px 0; border-top: 1px solid var(--rg-line); }
 .rg-record-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 10px; color: var(--rg-muted); }
 .rg-record-status button { min-height: 32px; border-radius: 8px; padding: 4px 8px; color: var(--rg-accent); background: var(--rg-accent-soft); font-size: 11px; }

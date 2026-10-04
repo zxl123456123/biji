@@ -1,16 +1,18 @@
 # 记录时光接入说明
 
-日期：2026-10-04。独立分支从 `630bf4d`（0.3.0）开发。`E:/project-funny/biji` 的 0.5.3 改动由另一会话持有，本会话没有修改、复制或提交其中的工作。
+日期：2026-10-04。独立分支从 `630bf4d`（0.3.0）开发。`E:/project-funny/biji` 的主目录由另一会话持有，首轮调研为 0.5.3、本轮已读到 0.5.5；本会话没有修改、复制或提交其中的工作。
 
 ## 文件边界
 
 新增 `RecordGarden.tsx`、`RecordDayViews.tsx`、`RecordCompanion.tsx`、`recordGardenModel.ts` 与对应三份 CSS，只依赖已有 React、lucide-react 和 Note 类型。日期模型测试独立使用 Node 22.18+ 的类型剥离；没有 package、lockfile、存储、Rust 或数据库改动。
 
-0.3.0 分支的 `App.tsx` 只增加按需加载、记录时光导航和宿主回调；其既有整体布局、编辑器与其他代码不能覆盖当前 0.5.3 App。移植时应应用新增模块和文档，再由持有主目录的会话接线；不直接替换整个 App 或公共 styles。
+0.3.0 分支的 `App.tsx` 只增加按需加载、记录时光导航和宿主回调；其既有整体布局、编辑器与其他代码不能覆盖当前 0.5.5 App。移植时应应用新增模块和文档，再由持有主目录的会话接线；不直接替换整个 App 或公共 styles。
 
-## 0.5.3 参考接线
+当前主目录 Note 具有排序/置顶元数据，日历只读完整数组并保留传入顺序，不改这些字段。旧基线仅作独立 Web 预览；不得用其旧 Rust/桌面数据层写主目录迁移后的真实 SQLite，避免丢失新字段。
 
-以下依据 2026-10-04 读取的主目录快照；接入者必须核对自己的最终代码。补充 `CalendarDays` 图标及现有格式工具导入，`View` 增加 `'garden'`，主导航增加记录时光。已有 lazy/Suspense 可复用。
+## 0.5.5 参考接线
+
+以下依据 2026-10-04 再读主目录 0.5.5 快照；接入者必须核对自己的最终代码。补充 `CalendarDays` 图标及现有格式工具导入，`View` 增加 `'garden'`，主导航增加记录时光。已有 lazy/Suspense、`editLatestNote(id)` 与 `motionAllowed` 可复用；`renderMarkdown`/`withoutTags` 需补导入，与现 NotesView 安全渲染保持一致。
 
 ```tsx
 import { renderMarkdown } from './noteFormat'

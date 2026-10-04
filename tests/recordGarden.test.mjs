@@ -78,6 +78,23 @@ test('rolled ISO creation dates stay undated without changing valid timezone off
   }
 })
 
+test('lowercase RFC3339 separators do not bypass calendar validation', () => {
+  const invalid = [note('lower-april', { createdAt: '2026-04-31t12:00:00z' }),
+    note('lower-february', { createdAt: '2026-02-30t12:00:00+08:00' })]
+  for (const basis of ['created', 'record']) {
+    const model = buildRecordGardenModel(invalid, basis)
+    assert.equal(model.days.size, 0)
+    assert.deepEqual(model.undated, invalid)
+  }
+  for (const [zone, expected] of [['Asia/Shanghai', '2024-03-01'], ['America/New_York', '2024-02-29']]) {
+    const result = inTimeZone(zone, `
+      const model = buildRecordGardenModel([{ id: 'lower-valid', content: '', status: 'none', done: false, createdAt: '2024-02-29t23:30:00-05:00' }], 'created');
+      console.log(JSON.stringify([...model.days.keys()]));
+    `)
+    assert.deepEqual(result, [expected], zone)
+  }
+})
+
 test('deleted, restored and permanently removed notes produce consistent counts', () => {
   const notes = [note('active'), note('done', { done: true }), note('trash', { deletedAt: '2026-10-04T01:00:00Z', done: true })]
   for (const basis of ['created', 'record']) {

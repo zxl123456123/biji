@@ -53,6 +53,7 @@
 .rg-day-face { position: absolute; inset: 0; border-radius: 2px; background: var(--rg-day-front); }
 .rg-day-face-side, .rg-day-face-top { display: none; }
 .rg-day-spatial .rg-day-level-0 .rg-day-face { background: var(--rg-day-tone-0); }
+.rg-day-keyboard-hint { margin: 12px 0 0; color: var(--rg-day-muted); font-size: 11px; line-height: 1.7; }
 .rg-day-legend { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px; margin-top: 16px; color: var(--rg-day-muted); font-size: 11px; }
 .rg-day-key { display: inline-flex; align-items: center; gap: 4px; }
 .rg-day-swatch { width: 10px; height: 10px; border: 1px solid var(--rg-day-line); border-radius: 3px; background: var(--rg-day-tone-0); }
