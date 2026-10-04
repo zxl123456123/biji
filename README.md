@@ -45,20 +45,20 @@ npm run check
 
 ## 记录时光（独立功能分支）
 
-`codex/record-garden` 新增月历、热力格与 CSS 立体记录柱；点日期查看完整排版与当前完成状态，可继续打开原编辑器。同一天超过 30 条时逐批加载，统计始终包含全部有效记录。
+`codex/record-garden` 提供单一微立体月历：浅日期卡、薄底边与柔和阴影，日期和实际数量平放可读；点日期查看完整排版与当前完成状态，可继续打开原编辑器。同一天超过 30 条时逐批加载，统计始终包含全部有效记录。没有展示模式或正看/侧看选项。
 
 默认按本机创建日期统计，可切到用户指定的记录日期；修改时间不计为每日写作历史。回收站记录不参与，无法识别日期的记录仍有入口。像素机器人提供选日摘要、写记录与回今天，可隐藏；动态可暂停并跟随系统减少动态效果。
 
 日期支持方向键移动焦点、Home/End 到本周首尾、Enter/空格查看；原生 Tab 保留。列表显示已显示/总条数，末批显示实际数量，最后一批加载后焦点交给第一条新增记录。切日期或口径同时回首批，时光页不显示原列表的旧查询值，返回原列表后查询仍保留。
 
-本分支从已提交的 0.3.0 基线开发，未合并到另一会话的 0.5.5 主目录，也未发布新 Windows 安装器。使用 `npm run dev -- --port 1436 --strictPort` 可独立 Web 预览；不要用旧基线桌面数据层写已经升级排序/置顶元数据的 SQLite。日期模型验证：
+本分支从已提交的 0.3.0 基线开发。2026-10-05 已将本功能叠加到当前 0.6.0 主目录工作副本，复用当前编辑器、安全正文和动态政策；原空间/排序/宠物源码保持，时光页隐藏浮层宠物以避免重复伙伴。主目录其他会话的未提交工作没有纳入本分支；[接入补丁](docs/current/record-garden/integration-0.6.0.patch)记录精确 App 接线。没有新 Windows 安装器，不用旧基线桌面数据层写升级后的 SQLite。当前主目录可用 `npm run dev -- --port 1437 --strictPort` 隔离预览，日期模型验证：
 
 ```bash
 node --experimental-strip-types --test tests/recordGarden.test.mjs
 npm run build
 ```
 
-需要 Node.js 22.18 或更高版本。[功能、GitHub 参考与 Cinema 4D 路线](docs/Record.Garden.md)说明当前范围，[接入说明](docs/current/record-garden/integration.md)用于后续协调主目录。
+需要 Node.js 22.18 或更高版本。[功能、GitHub 参考与 Cinema 4D 路线](docs/Record.Garden.md)说明当前范围，[接入说明](docs/current/record-garden/integration.md)与[本轮验证](docs/current/record-garden/verification-single.md)区分独立分支和当前工作台的证据。
 
 ## 原生端与 AI
 

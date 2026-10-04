@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Cuboid, Grid2X2, Pause, Play, Plus } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Pause, Play, Plus } from 'lucide-react'
 import type { Note } from './types'
 import { buildRecordGardenModel, dayLabel, localDateKey, monthCells, monthDays, shiftMonth } from './recordGardenModel'
 import type { RecordDateBasis } from './recordGardenModel'
 import RecordDayViews from './RecordDayViews'
-import type { RecordDayView } from './RecordDayViews'
 import { RecordCompanion } from './RecordCompanion'
 import './record-garden.css'
 
@@ -54,8 +53,6 @@ export default function RecordGarden({ notes, renderNote, onOpenNote, onCreate, 
   const [month, setMonth] = useState(() => today.slice(0, 7))
   const [selectedDate, setSelectedDate] = useState<string | null>(today)
   const [basis, setBasis] = useState<RecordDateBasis>('created')
-  const [view, setView] = useState<RecordDayView>('calendar')
-  const [angle, setAngle] = useState<'front' | 'side'>('front')
   const [motionEnabled, setMotionEnabled] = useState(true)
   const [limit, setLimit] = useState(30)
   const recordsRef = useRef<HTMLElement>(null)
@@ -111,11 +108,6 @@ export default function RecordGarden({ notes, renderNote, onOpenNote, onCreate, 
         <button aria-pressed={basis === 'created'} onClick={() => changeBasis('created')}>创建日期</button>
         <button aria-pressed={basis === 'record'} onClick={() => changeBasis('record')}>记录日期</button>
       </div>
-      <div className="rg-tabs" role="group" aria-label="时光展示形式">
-        <button aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}><CalendarDays size={15}/>月历</button>
-        <button aria-pressed={view === 'heatmap'} onClick={() => setView('heatmap')}><Grid2X2 size={15}/>热力格</button>
-        <button aria-pressed={view === 'spatial'} onClick={() => setView('spatial')}><Cuboid size={15}/>立体</button>
-      </div>
     </div>
     <p className="rg-basis-note">{basis === 'created'
       ? '按本机日期统计新建记录；修改记录不会增加次数。'
@@ -126,11 +118,7 @@ export default function RecordGarden({ notes, renderNote, onOpenNote, onCreate, 
           <div><h2>{monthLabel}</h2><p><strong>{count}</strong> 条记录 · <strong>{recordedDays}</strong> 天留下片段</p></div>
           <div><button className="rg-icon" aria-label="上个月" disabled={month === '0001-01'} onClick={() => moveMonth(-1)}><ChevronLeft size={18}/></button><button className="rg-button" onClick={goToday}>今天</button><button className="rg-icon" aria-label="下个月" disabled={month === '9999-12'} onClick={() => moveMonth(1)}><ChevronRight size={18}/></button></div>
         </div>
-        {view === 'spatial' && <div className="rg-spatial-controls">
-          <div className="rg-tabs" role="group" aria-label="立体视角"><button aria-pressed={angle === 'front'} onClick={() => setAngle('front')}>正看</button><button aria-pressed={angle === 'side'} onClick={() => setAngle('side')}>侧看</button></div>
-          <span>柱高按数量分档，具体条数写在日期下方。</span>
-        </div>}
-        <RecordDayViews cells={cells} selectedDate={selectedDate} today={today} view={view} angle={angle} animate={motionAllowed} onSelect={selectDay}/>
+        <RecordDayViews cells={cells} selectedDate={selectedDate} today={today} animate={motionAllowed} onSelect={selectDay}/>
         <div className="rg-calendar-footer">
           <button className="rg-motion-toggle" onClick={() => setMotionEnabled(value => !value)}>{motionEnabled ? <Pause size={14}/> : <Play size={14}/>}<span>{motionEnabled ? '暂停动态' : '开启动效'}</span></button>
           {reduced && <span>已跟随系统减少动态效果</span>}
@@ -145,7 +133,7 @@ export default function RecordGarden({ notes, renderNote, onOpenNote, onCreate, 
           {records.length ? <>
             {records.slice(0, limit).map((note, index) => <article className="rg-record" key={note.id}>
               <div className="rg-record-status"><span>{note.done ? '已完成' : '未完成'}</span><button onClick={() => onOpenNote(note.id)} aria-label={`打开第${index + 1}条记录`}>打开记录</button></div>
-              <div className="rg-record-body">{renderNote(note)}</div>
+              <div className="rg-record-body markdown-preview">{renderNote(note)}</div>
             </article>)}
             {remaining > 0 && <button className="rg-button rg-more" onClick={loadMore}>再看{Math.min(30, remaining)}条 · 还有{remaining}条</button>}
           </> : <div className="rg-empty"><CalendarDays size={28}/><p>这一天还没有记录</p><span>{basis === 'created' ? '愿意的话，记下此刻的一点想法。' : '也可以切到创建日期，回看当时写下的内容。'}</span><button className="rg-button" onClick={onCreate}>写一条记录</button></div>}

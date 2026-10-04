@@ -3,7 +3,7 @@
   --rg-text: var(--text, #343347); --rg-muted: var(--muted, #696779);
   --rg-line: var(--line, #e1dfeb); --rg-accent: var(--accent, #7258a6);
   --rg-accent-soft: var(--accent-soft, #eee8fa);
-  max-width: 1220px; margin: 0 auto; padding: 40px 40px 64px; color: var(--rg-text);
+  max-width: 1220px; margin: 0 auto; padding: 32px 32px 56px; color: var(--rg-text);
 }
 :root[data-theme='dark'] .rg-page {
   --rg-surface: var(--surface, #292734); --rg-soft: var(--soft, #353240);
@@ -12,7 +12,7 @@
   --rg-accent-soft: var(--accent-soft, #41334f);
 }
 .rg-page button:focus-visible { outline: 2px solid var(--rg-accent); outline-offset: 3px; }
-.rg-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 28px; }
+.rg-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; }
 .rg-heading h1 { margin: 8px 0; font-size: 30px; letter-spacing: .04em; color: var(--rg-text); }
 .rg-heading p { margin: 0; color: var(--rg-muted); font-size: 13px; line-height: 1.7; }
 .rg-heading .rg-eyebrow { font-size: 11px; letter-spacing: .16em; color: var(--rg-accent); }
@@ -27,15 +27,15 @@
 .rg-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 11px; border-radius: 9px; background: transparent; color: var(--rg-muted); font-size: 12px; }
 .rg-tabs button[aria-pressed='true'] { background: var(--rg-surface); color: var(--rg-accent); box-shadow: 0 2px 6px #34234c09; }
 .rg-basis-note { color: var(--rg-muted); font-size: 12px; line-height: 1.7; margin: 13px 0 22px; }
-.rg-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); align-items: start; gap: 22px; }
+.rg-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); align-items: start; gap: 24px; }
 .rg-calendar-panel, .rg-records { padding: 22px; border: 1px solid var(--rg-line); border-radius: 22px; background: var(--rg-surface); min-width: 0; }
+.rg-calendar-panel { box-shadow: 0 4px 0 var(--rg-soft), 0 14px 30px #34234c07; }
+.rg-records { box-shadow: 0 6px 22px #34234c05; }
 .rg-month-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
 .rg-month-nav h2 { font-size: 19px; margin: 0 0 8px; }
 .rg-month-nav p { color: var(--rg-muted); font-size: 11px; margin: 0; line-height: 1.7; }
 .rg-month-nav strong { color: var(--rg-text); font-weight: 600; }
 .rg-month-nav > div:last-child { display: flex; gap: 5px; }
-.rg-spatial-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
-.rg-spatial-controls > span { color: var(--rg-muted); font-size: 11px; line-height: 1.6; }
 .rg-calendar-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--rg-line); color: var(--rg-muted); font-size: 10px; }
 .rg-motion-toggle, .rg-undated { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; color: var(--rg-muted); background: transparent; padding: 5px 0; font-size: 11px !important; }
 .rg-undated { margin-left: auto; color: var(--rg-accent); }

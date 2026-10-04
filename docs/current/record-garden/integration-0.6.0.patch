@@ -1,0 +1,26 @@
+diff --git a/src/App.tsx b/src/App.tsx
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -2 +2 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+-import { ArrowDownLeft, ArrowDownToLine, ArrowUpRight, Download, FileUp, LayoutList, Network, Moon, PinOff, Plus, Search, Settings, Sparkles, Sun, Trash2, WalletCards, X } from 'lucide-react'
++import { ArrowDownLeft, ArrowDownToLine, ArrowUpRight, CalendarDays, Download, FileUp, LayoutList, Network, Moon, PinOff, Plus, Search, Settings, Sparkles, Sun, Trash2, WalletCards, X } from 'lucide-react'
+@@ -11 +11,2 @@ import { reorderInCurrentView, toggleNotePin } from './noteOrder'
+-import { money, today, selectNotes, selectMonth, monthTotals } from './recordTools'
++import { money, today, selectNotes, selectMonth, monthTotals, withoutTags } from './recordTools'
++import { renderMarkdown } from './noteFormat'
+@@ -25,0 +27 @@ const SpatialNoteMap = lazy(() => import('./SpatialNoteMap'))
++const RecordGarden = lazy(() => import('./RecordGarden'))
+@@ -27 +29 @@ const SpatialNoteMap = lazy(() => import('./SpatialNoteMap'))
+-type View = 'graph' | 'space' | 'all' | 'trash' | 'ledger' | 'settings'
++type View = 'graph' | 'space' | 'garden' | 'all' | 'trash' | 'ledger' | 'settings'
+@@ -178,0 +181,5 @@ export default function App() {
++  } else if (view === 'garden') {
++    viewContent = <Suspense fallback={<div className="content" role="status">正在打开记录时光…</div>}>
++      <RecordGarden notes={activeNotes} renderNote={note => renderMarkdown(withoutTags(note.content) || '仅标签记录')}
++        onOpenNote={editLatestNote} onCreate={createInView} animate={motionAllowed}/>
++    </Suspense>
+@@ -205,0 +213 @@ export default function App() {
++        <Nav icon={<CalendarDays/>} text="记录时光" selected={view==='garden'} onClick={()=>nav('garden')}/>
+@@ -221 +229 @@ export default function App() {
+-      shown={petShown} hidden={view === 'settings' || view === 'space'} onHide={() => setPetShown(false)}/>
++      shown={petShown} hidden={view === 'settings' || view === 'space' || view === 'garden'} onHide={() => setPetShown(false)}/>
