@@ -33,4 +33,4 @@
 
 ## 承接结论边界
 
-以上 UI 路径只证明 IAB 当前 Chromium 开发预览中的观察。r2 已通过所述循环复测；[独立实施后审查 r2](review_notes_impl_r2_1.md)给出协议与业务双 PASS，并保留嵌套 React root 生命周期复杂度 WARN。提交范围与远端结果另以实际 Git 命令核对。
+以上 UI 路径只证明 IAB 当前 Chromium 开发预览中的观察。r2 已通过所述循环复测；[独立实施后审查 r2](review_notes_impl_r2_1.md)给出协议与业务双 PASS，并保留嵌套 React root 生命周期复杂度 WARN。`git log --oneline origin/main..HEAD` 在功能提交推送前只列出 `fd400fc`；`git push` 退出码 0，远端从 `9f0b9d3` 前进到 `fd400fc`。本段状态同步将以独立文档提交推送。
