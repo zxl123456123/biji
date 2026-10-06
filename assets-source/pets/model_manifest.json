@@ -1,0 +1,52 @@
+{
+  "character": "xiaotuan",
+  "source": "E:\\project-funny\\biji\\assets-source\\pets\\xiaotuan.blend",
+  "glb": "E:\\project-funny\\biji\\public\\pets\\xiaotuan.glb",
+  "blender_version": "5.2.2 LTS",
+  "clips": {
+    "happy": {
+      "channel_count": 3,
+      "node_targets": [
+        "ArmRight",
+        "PetRoot"
+      ]
+    },
+    "idle": {
+      "channel_count": 3,
+      "node_targets": [
+        "ArmRight",
+        "PetRoot"
+      ]
+    }
+  },
+  "node_count": 36,
+  "previews": [
+    "E:\\project-funny\\biji\\assets-source\\pets\\previews\\xiaotuan_front.png",
+    "E:\\project-funny\\biji\\assets-source\\pets\\previews\\xiaotuan_side.png",
+    "E:\\project-funny\\biji\\assets-source\\pets\\previews\\xiaotuan_back.png"
+  ],
+  "files": {
+    "xiaotuan.blend": {
+      "size": 258075,
+      "sha256": "664bf14f1b7e1675b57f38cd2ea5a671470abc41e2d316a06b3059dbc90096d2"
+    },
+    "xiaotuan.glb": {
+      "size": 766924,
+      "sha256": "c115b08b8cbc17737602060293549e81766ec777a53b7b5d4dfee36bf470884a"
+    },
+    "xiaotuan_front.png": {
+      "size": 299964,
+      "sha256": "35b67f65dcf5c92748326823cde1be6daa2b36327444370bcb839b8d59405292"
+    },
+    "xiaotuan_side.png": {
+      "size": 280016,
+      "sha256": "ef929ddc67eb0b62ceb5151a5587f6629d2423186ec7f0212dfd20c26e0e0f6a"
+    },
+    "xiaotuan_back.png": {
+      "size": 276705,
+      "sha256": "ec8260d6238ad1729ef8f5fd9f5aa53e1822592ad25ad21161c5e00f78fa0285"
+    }
+  },
+  "visual_status": "outline approved; final detail awaiting user review",
+  "back_view_status": "original completion; no official back reference"
+}

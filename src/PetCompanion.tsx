@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useReducer, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { clampPetPosition, isPetTap, movePetGesture, petPolicy, reducePetMood } from './petBehavior'
 import type { PetGesture, PetMood, PetPoint, PetState } from './petBehavior'
 import { DEFAULT_PET_APPEARANCE, PET_CHARACTER_NAMES } from './petAppearance'
 import type { PetAppearance, PetCharacter } from './petAppearance'
 import { PetAccessories, PetCharacterBody } from './PetCharacters'
+import { Pet3DView } from './Pet3DView'
 import './pet.css'
+
+const DevModelPicker = import.meta.env.DEV ? lazy(() => import('./PetDevModelPicker').then(module => ({ default: module.PetDevModelPicker }))) : null
+const originalModelUrl = `${import.meta.env.BASE_URL}pets/xiaotuan.glb`
 
 type PetPolicyProps = { theme: 'light' | 'dark'; motionAllowed: boolean; visible: boolean; businessEnabled: boolean }
 export type PetCompanionProps = PetPolicyProps & { appearance: PetAppearance; shown: boolean; hidden: boolean; onHide(): void; onOpenNotes(): void; onOpenTodos(): void }
@@ -107,6 +111,15 @@ export function PetPortrait({ appearance, mood, animate }: { appearance: PetAppe
   </svg>
 }
 
+function PetFigure3DOrSvg({ appearance, mood, animate, previewUrl, onError, onLoaded }: {
+  appearance: PetAppearance; mood: PetMood; animate: boolean; previewUrl?: string; onError?(message: string): void; onLoaded?(): void
+}) {
+  const modelUrl = appearance.character === 'xiaotuan' ? originalModelUrl : import.meta.env.DEV ? previewUrl : undefined
+  const fallback = <PetPortrait appearance={appearance} mood={mood} animate={animate}/>
+  return modelUrl ? <Pet3DView key={modelUrl} appearance={appearance} mood={mood} animate={animate}
+    modelUrl={modelUrl} original={appearance.character === 'xiaotuan'} fallback={fallback} onError={onError} onLoaded={onLoaded}/> : fallback
+}
+
 function viewport() {
   const view = window.visualViewport
   return { width: view?.width ?? window.innerWidth, height: view?.height ?? window.innerHeight, left: view?.offsetLeft ?? 0, top: view?.offsetTop ?? 0 }
@@ -177,7 +190,7 @@ export function PetCompanion(props: PetCompanionProps) {
       onPointerDown={start} onPointerMove={move} onPointerUp={event => end(event)} onPointerCancel={event => end(event, true)}
       onLostPointerCapture={event => { if (gesture.current?.pointerId === event.pointerId) { gesture.current = null; pet.clearFeedback(); pet.dispatch('cancel') } }}
       onClick={event => { if (event.detail === 0) pet.tap() }}>
-      <PetPortrait appearance={props.appearance} mood={pet.state.mood} animate={pet.policy.animate}/>
+      {pet.policy.present && <PetFigure3DOrSvg appearance={props.appearance} mood={pet.state.mood} animate={pet.policy.animate}/>}
     </button>
     <p className="pet-feedback" role="status">{messages[props.appearance.character][pet.state.mood]}</p>
     <div className="pet-actions">
@@ -192,11 +205,15 @@ export function PetCompanion(props: PetCompanionProps) {
 export function PetShowcase(props: PetShowcaseProps) {
   const [draft, setDraft] = useState<PetAppearance>(() => ({ ...props.appearance }))
   const [saveMessage, setSaveMessage] = useState('')
+  const [devPreview, setDevPreview] = useState<{ character: PetCharacter; url: string } | null>(null)
+  const [devError, setDevError] = useState('')
   const pet = usePetBehavior(props, draft.character)
   const name = PET_CHARACTER_NAMES[draft.character]
   const tryingOn = draft.character !== props.appearance.character || draft.palette !== props.appearance.palette
     || draft.head !== props.appearance.head || draft.accessory !== props.appearance.accessory
   useEffect(() => { setDraft({ ...props.appearance }) }, [props.appearance])
+  useEffect(() => () => { if (devPreview) URL.revokeObjectURL(devPreview.url) }, [devPreview])
+  useEffect(() => { setDevPreview(null); setDevError('') }, [draft.character])
   const preview = (next: PetAppearance) => { if (pet.policyRef.current.interactive) { setDraft(next); setSaveMessage('') } }
   const apply = () => {
     if (!pet.policyRef.current.interactive) return
@@ -208,12 +225,20 @@ export function PetShowcase(props: PetShowcaseProps) {
       <div className="pet-showcase-stage" data-animate={pet.policy.animate}>
         <div className="pet-stage-halo"/><div className="pet-stage-ring"/>
         <button type="button" className="pet-touch" aria-label={`轻触${name}`} disabled={!pet.policy.interactive} onClick={pet.tap}>
-          <span className="pet-preview-transition" key={`${draft.character}:${draft.palette}:${draft.head}:${draft.accessory}`}>
-            <PetPortrait appearance={draft} mood={pet.state.mood} animate={pet.policy.animate}/>
+          <span className="pet-preview-transition" key={draft.character === 'xiaotuan' || (import.meta.env.DEV && devPreview?.character === draft.character)
+            ? draft.character : `${draft.character}:${draft.palette}:${draft.head}:${draft.accessory}`}>
+            <PetFigure3DOrSvg appearance={draft} mood={pet.state.mood} animate={pet.policy.animate}
+              previewUrl={devPreview?.character === draft.character ? devPreview.url : undefined}
+              onLoaded={() => { if (devPreview?.character === draft.character) URL.revokeObjectURL(devPreview.url) }}
+              onError={message => { setDevError(message); if (devPreview?.character === draft.character) URL.revokeObjectURL(devPreview.url) }}/>
           </span>
         </button>
         <span className="pet-stage-caption">{name}陪你慢慢记录</span><span className="pet-preview-badge">{tryingOn ? '试穿中 · 穿上后才会保存' : '当前装扮 · 已穿上'}</span>
       </div>
+      {DevModelPicker && draft.character !== 'xiaotuan' && <Suspense fallback={null}><DevModelPicker error={devError} onSelect={file => {
+        setDevError('')
+        setDevPreview({ character: draft.character, url: URL.createObjectURL(file) })
+      }}/></Suspense>}
       <div className="pet-showcase-copy">
         <span className="pet-kicker">你的宠物伙伴</span><h2>{name}</h2>
         <p>{introductions[draft.character]}</p>

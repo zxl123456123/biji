@@ -2,6 +2,12 @@
 
 一个本地优先、可离线安装的轻量笔记与生活账本。
 
+## 2026-10-06 三维宠物源码增量
+
+原创晴小团现有 Blender 源文件和 GLB 模型，在记录页悬浮伙伴与「伙伴」大展示中实时呈现待机、招呼、配色及头饰/配件；模型随 Web 离线缓存准备，加载或 WebGL 不可用时回退原 SVG。关闭动态、休息、试穿、穿上、撤销与本机外观保存仍沿用原交互和四字段存储，缩略图与记录时光伙伴仍是 SVG。[模型与实施记录](docs/current/xiaotuan-3d-pet/README.md)。
+
+奶龙、吉伊、小八、乌萨奇的可编辑 Blender 源与 GLB 保存在本机 `E:\pet-model-workbench`，开发模式可在「伙伴」页逐个选择本机 GLB 预览；公开 Web/Windows 构建仍使用四角色 SVG，不包含其模型或文件选择入口。四角色三维造型仍待视觉反馈，第三方形象的产品再分发授权尚未取得。下方 0.8.0 制品链接指既有发布包，不代表本次源码增量已进入该交付目录。
+
 ## 0.8.0 当前体验版 · 2026-10-06
 
 本版将记录年轮、待办、自绘标题栏及现有记录、账本、关联图、记录时光、伙伴能力收敛到同一份 Windows 构建。可使用[程序 EXE](src-tauri/target/deliveries/0.8.0-release/qingjian.exe)、[NSIS 安装包](src-tauri/target/deliveries/0.8.0-release/晴笺_0.8.0_x64-setup.exe)或[MSI](src-tauri/target/deliveries/0.8.0-release/晴笺_0.8.0_x64_zh-CN.msi)；这些制品保存在本机忽略目录，不随 Git 推送。[0.8.0 验证记录](docs/Release.Verification.0.8.0.md)列出来源、哈希、已测和未测。

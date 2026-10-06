@@ -6,6 +6,7 @@ export default defineConfig({
   server: { port: 1420, strictPort: true },
   plugins: [react(), VitePWA({
     registerType: 'autoUpdate',
+    workbox: { globPatterns: ['**/*.{js,css,html,glb}'] },
     manifest: {
       name: '晴笺 · 轻笔记与账本',
       short_name: '晴笺',
