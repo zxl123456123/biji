@@ -1,0 +1,257 @@
+{
+  "source": "Read-only qingjian-graph-r1-20261003/src/noteGraphModel.ts",
+  "fixtures": [
+    {
+      "input": [
+        {
+          "id": "0000",
+          "content": "甲乙丙丁"
+        },
+        {
+          "id": "0001",
+          "content": "甲乙丙丁"
+        },
+        {
+          "id": "0002",
+          "content": "甲乙丙戊"
+        },
+        {
+          "id": "0003",
+          "content": "独立记录"
+        }
+      ],
+      "expected": {
+        "nodes": [
+          {
+            "id": "0000",
+            "group": "text:0000"
+          },
+          {
+            "id": "0001",
+            "group": "text:0000"
+          },
+          {
+            "id": "0002",
+            "group": "single:0002"
+          },
+          {
+            "id": "0003",
+            "group": "single:0003"
+          }
+        ],
+        "edges": [
+          {
+            "source": "0000",
+            "target": "0001",
+            "sharedTags": [],
+            "similarity": 1
+          },
+          {
+            "source": "0000",
+            "target": "0002",
+            "sharedTags": [],
+            "similarity": 0.4336404993559331
+          },
+          {
+            "source": "0001",
+            "target": "0002",
+            "sharedTags": [],
+            "similarity": 0.4336404993559331
+          }
+        ]
+      }
+    },
+    {
+      "input": [
+        {
+          "id": "0000",
+          "content": "学习 React 写笔记 #工作"
+        },
+        {
+          "id": "0001",
+          "content": "学习 React 阅读笔记 #工作"
+        },
+        {
+          "id": "0002",
+          "content": "旅行计划 #生活 #生活"
+        },
+        {
+          "id": "0003",
+          "content": "旅行计划订机票 #生活"
+        }
+      ],
+      "expected": {
+        "nodes": [
+          {
+            "id": "0000",
+            "group": "tag:工作"
+          },
+          {
+            "id": "0001",
+            "group": "tag:工作"
+          },
+          {
+            "id": "0002",
+            "group": "tag:生活"
+          },
+          {
+            "id": "0003",
+            "group": "tag:生活"
+          }
+        ],
+        "edges": [
+          {
+            "source": "0000",
+            "target": "0001",
+            "sharedTags": [
+              "工作"
+            ],
+            "similarity": 0.655384444755513
+          },
+          {
+            "source": "0002",
+            "target": "0003",
+            "sharedTags": [
+              "生活"
+            ],
+            "similarity": 0.584153936368861
+          }
+        ]
+      }
+    },
+    {
+      "input": [
+        {
+          "id": "0000",
+          "content": "ＡＢＣ 🚀 𠀀𠀁𠀂"
+        },
+        {
+          "id": "0001",
+          "content": "abc 🚀 𠀀𠀁𠀂"
+        },
+        {
+          "id": "0002",
+          "content": "[[color:blue|正文相似]] #标签"
+        },
+        {
+          "id": "0003",
+          "content": "**正文相似** #标签"
+        }
+      ],
+      "expected": {
+        "nodes": [
+          {
+            "id": "0000",
+            "group": "text:0000"
+          },
+          {
+            "id": "0001",
+            "group": "text:0000"
+          },
+          {
+            "id": "0002",
+            "group": "tag:标签"
+          },
+          {
+            "id": "0003",
+            "group": "tag:标签"
+          }
+        ],
+        "edges": [
+          {
+            "source": "0000",
+            "target": "0001",
+            "sharedTags": [],
+            "similarity": 1
+          },
+          {
+            "source": "0002",
+            "target": "0003",
+            "sharedTags": [
+              "标签"
+            ],
+            "similarity": 1
+          }
+        ]
+      }
+    },
+    {
+      "input": [
+        {
+          "id": "0000",
+          "content": ""
+        },
+        {
+          "id": "0001",
+          "content": "#孤立"
+        },
+        {
+          "id": "0002",
+          "content": "甲"
+        },
+        {
+          "id": "0003",
+          "content": "甲"
+        },
+        {
+          "id": "0004",
+          "content": "乙"
+        },
+        {
+          "id": "0005",
+          "content": "关于甲乙丙丁"
+        },
+        {
+          "id": "0006",
+          "content": "甲乙丙丁的内容"
+        }
+      ],
+      "expected": {
+        "nodes": [
+          {
+            "id": "0000",
+            "group": "single:0000"
+          },
+          {
+            "id": "0001",
+            "group": "tag:孤立"
+          },
+          {
+            "id": "0002",
+            "group": "text:0002"
+          },
+          {
+            "id": "0003",
+            "group": "text:0002"
+          },
+          {
+            "id": "0004",
+            "group": "single:0004"
+          },
+          {
+            "id": "0005",
+            "group": "single:0005"
+          },
+          {
+            "id": "0006",
+            "group": "single:0006"
+          }
+        ],
+        "edges": [
+          {
+            "source": "0002",
+            "target": "0003",
+            "sharedTags": [],
+            "similarity": 1
+          },
+          {
+            "source": "0005",
+            "target": "0006",
+            "sharedTags": [],
+            "similarity": 0.41083896221261623
+          }
+        ]
+      }
+    }
+  ]
+}

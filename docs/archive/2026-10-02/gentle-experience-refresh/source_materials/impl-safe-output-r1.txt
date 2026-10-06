@@ -1,0 +1,145 @@
+npm test
+exit_code=0
+
+> luma-notes@0.4.0 test
+> node --test tests/*.test.mjs
+
+TAP version 13
+# Subtest: exact tag excludes similar tags and plain mentions
+ok 1 - exact tag excludes similar tags and plain mentions
+  ---
+  duration_ms: 2.421
+  type: 'test'
+  ...
+# Subtest: tag names remain case sensitive
+ok 2 - tag names remain case sensitive
+  ---
+  duration_ms: 0.1475
+  type: 'test'
+  ...
+# Subtest: lowercase tag is a different tag
+ok 3 - lowercase tag is a different tag
+  ---
+  duration_ms: 0.0706
+  type: 'test'
+  ...
+# Subtest: query is trimmed and case insensitive
+ok 4 - query is trimmed and case insensitive
+  ---
+  duration_ms: 0.0636
+  type: 'test'
+  ...
+# Subtest: query, tag and unfinished compose with AND
+ok 5 - query, tag and unfinished compose with AND
+  ---
+  duration_ms: 0.1125
+  type: 'test'
+  ...
+# Subtest: trash does not leak active records
+ok 6 - trash does not leak active records
+  ---
+  duration_ms: 0.0884
+  type: 'test'
+  ...
+# Subtest: clearing all filters restores source order
+ok 7 - clearing all filters restores source order
+  ---
+  duration_ms: 0.0702
+  type: 'test'
+  ...
+# Subtest: missing result returns an empty array
+ok 8 - missing result returns an empty array
+  ---
+  duration_ms: 0.0529
+  type: 'test'
+  ...
+# Subtest: selectors preserve records and do not mutate the source
+ok 9 - selectors preserve records and do not mutate the source
+  ---
+  duration_ms: 0.3452
+  type: 'test'
+  ...
+# Subtest: month selection respects local midnight and cross-year boundaries
+ok 10 - month selection respects local midnight and cross-year boundaries
+  ---
+  duration_ms: 0.3759
+  type: 'test'
+  ...
+# Subtest: previous year and following month remain separately selectable
+ok 11 - previous year and following month remain separately selectable
+  ---
+  duration_ms: 0.1552
+  type: 'test'
+  ...
+# Subtest: empty month has zero totals and invalid dates are excluded
+ok 12 - empty month has zero totals and invalid dates are excluded
+  ---
+  duration_ms: 0.0774
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 109.442
+
+npm run build
+exit_code=0
+
+> luma-notes@0.4.0 build
+> tsc -b && vite build
+
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 1876 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/manifest.webmanifest                          0.24 kB
+dist/index.html                                    0.51 kB │ gzip:  0.34 kB
+dist/assets/index-BcD9Tq6c.css                    25.33 kB │ gzip:  5.99 kB
+dist/assets/workbox-window.prod.es5-Bd17z0YL.js    5.65 kB │ gzip:  2.20 kB
+dist/assets/index-C3OCUq85.js                    270.14 kB │ gzip: 85.63 kB
+
+✓ built in 186ms
+
+PWA v1.3.0
+mode      generateSW
+precache  5 entries (294.58 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-9c191d2f.js
+
+git diff --check
+exit_code=0
+warning: in the working copy of 'src/store.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/styles.css', LF will be replaced by CRLF the next time Git touches it
+
+npm run build (month memo final)
+exit_code=0
+
+> luma-notes@0.4.0 build
+> tsc -b && vite build
+
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 1876 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/manifest.webmanifest                          0.24 kB
+dist/index.html                                    0.51 kB │ gzip:  0.34 kB
+dist/assets/index-BcD9Tq6c.css                    25.33 kB │ gzip:  5.99 kB
+dist/assets/workbox-window.prod.es5-Bd17z0YL.js    5.65 kB │ gzip:  2.20 kB
+dist/assets/index-DJlVivUD.js                    270.15 kB │ gzip: 85.64 kB
+
+✓ built in 244ms
+
+PWA v1.3.0
+mode      generateSW
+precache  5 entries (294.59 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-9c191d2f.js

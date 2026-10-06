@@ -9,6 +9,7 @@ export type Note = {
   scheduledDate?: string
   done: boolean
   deletedAt?: string
+  pinned?: boolean
 }
 
 export type NoteDraft = Pick<Note, 'content' | 'status' | 'scheduledDate'> & {
@@ -25,8 +26,18 @@ export type Transaction = {
   updatedAt?: string
 }
 
+export type Todo = {
+  id: string
+  title: string
+  dueDate: string
+  done: boolean
+  createdAt: string
+  updatedAt?: string
+}
+
 export type AppData = {
   version: 1
   notes: Note[]
   transactions: Transaction[]
+  todos: Todo[]
 }

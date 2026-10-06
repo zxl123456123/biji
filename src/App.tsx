@@ -1,102 +1,324 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownLeft, ArrowDownToLine, ArrowUpRight, Bold, CalendarDays, Check, Clock3, Download, FileUp, Hash, Heading1, Inbox, Italic, LayoutList, Menu, Moon, Palette, Pencil, Pin, PinOff, Plus, RotateCcw, Search, Settings, Sparkles, Sun, Trash2, Type, WalletCards, X } from 'lucide-react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDownLeft, ArrowDownToLine, ArrowUpRight, CalendarDays, CheckSquare, Download, FileUp, LayoutList, Network, Minus, Moon, PinOff, Plus, Search, Settings, Sparkles, Square, Sun, Trash2, WalletCards, X } from 'lucide-react'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { askAi, isDesktop, loadDesktopData, prepareAi, saveDesktopData } from './desktop'
-import { clearNoteDraft, exportData, loadNoteDraft, loadNotes, loadTransactions, parseBackup, saveNoteDraft, saveNotes, saveTransactions } from './store'
-import type { Note, NoteStatus, Transaction } from './types'
+import { exportData, importBackupData, loadNotes, loadTodos, loadTransactions, saveNotes, saveTodos, saveTransactions } from './store'
+import type { Note, Todo, Transaction } from './types'
+import { TodoView } from './TodoView'
 
-type View = 'today' | 'tomorrow' | 'later' | 'all' | 'trash' | 'ledger' | 'settings'
+import { NoteComposer } from './NoteComposer'
+import { Modal } from './Modal'
+import { NotesView } from './NotesView'
+import { reorderInCurrentView, toggleNotePin } from './noteOrder'
+import { money, today, selectNotes, selectMonth, monthTotals, withoutTags } from './recordTools'
+import { renderMarkdown } from './noteFormat'
+import { useNoteGraph } from './useNoteGraph'
+import { SoftButton, SoftInteraction } from './SoftInteraction'
+import { QuickOpen } from './QuickOpen'
+import { TagPicker } from './TagPicker'
+import { NoteFilters } from './NoteFilters'
+import { PetCompanion, PetPortrait, PetShowcase } from './PetCompanion'
+import { PET_VISIBLE_KEY } from './petBehavior'
+import { PET_CHARACTER_NAMES, parsePetAppearance, readPetAppearance, writePetAppearance } from './petAppearance'
+import type { PetAppearance } from './petAppearance'
+import { collectTags, createEditHandoff, currentRecord, ignoreNavigationKey } from './recordNavigation'
+import type { LocateRequest, LocateResult } from './graphFocus'
+import type { GraphSession } from './graphGeometry'
+const NoteGraph = lazy(() => import('./NoteGraph'))
+const RecordGarden = lazy(() => import('./RecordGarden'))
+const CelestialNoteWheel = lazy(() => import('./CelestialNoteWheel'))
+
+type View = 'graph' | 'pet' | 'garden' | 'all' | 'todos' | 'trash' | 'ledger' | 'settings'
 type Composer = { type: 'note'; note?: Note } | { type: 'transaction'; item?: Transaction } | null
 type Toast = { message: string; action?: { label: string; run: () => void } }
-const labels = { today: '今天', tomorrow: '明天', later: '准备中', all: '所有记录', trash: '回收站' }
-const money = (n: number) => new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(n)
-const dateKey = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
-const today = () => dateKey(); const tomorrow = () => dateKey(new Date(Date.now() + 86400000))
-const dateLabel = (s?: string) => s ? new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(`${s}T12:00:00`)) : ''
-const tagsFor = (content: string) => content.match(/#[\p{L}\p{N}_-]+/gu) ?? []
-
 export default function App() {
-  const [notes, setNotes] = useState<Note[]>(loadNotes), [transactions, setTransactions] = useState<Transaction[]>(loadTransactions)
-  const [view, setView] = useState<View>('today'), [query, setQuery] = useState(''), [composer, setComposer] = useState<Composer>(null), [mobileNav, setMobileNav] = useState(false)
+  const [notes, setNotes] = useState<Note[]>(loadNotes), [transactions, setTransactions] = useState<Transaction[]>(loadTransactions), [todos, setTodos] = useState<Todo[]>(loadTodos)
+  const [view, setView] = useState<View>('all'), [query, setQuery] = useState(''), [composer, setComposer] = useState<Composer>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('luma-theme') === 'dark' ? 'dark' : 'light')
   const [toast, setToast] = useState<Toast | null>(null), [ready, setReady] = useState(!isDesktop()), [aiOpen, setAiOpen] = useState(false)
   const [pinnedTags, setPinnedTags] = useState<string[]>(() => JSON.parse(localStorage.getItem('luma-pinned-tags') ?? '[]'))
+  const [selectedTag, setSelectedTag] = useState<string | null>(null), [unfinished, setUnfinished] = useState(false)
+  const [ambientEnabled, setAmbientEnabled] = useState(() => localStorage.getItem('luma-ambient-motion') !== 'off')
+  const [petShown, setPetShown] = useState(() => localStorage.getItem(PET_VISIBLE_KEY) !== 'off')
+  const [petAppearance, setPetAppearance] = useState(readPetAppearance)
+  const [todoReminder, setTodoReminder] = useState(false)
+  const reminderClose = useRef<HTMLButtonElement>(null), reminderPanel = useRef<HTMLDivElement>(null), reminderReturnFocus = useRef<HTMLElement | null>(null)
+  const [localDay, setLocalDay] = useState(today)
+  const applyPetAppearance = (next: PetAppearance): boolean => {
+    const value = parsePetAppearance(next)
+    setPetAppearance(value)
+    return writePetAppearance(value)
+  }
+  const [reducedMotion, setReducedMotion] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [recordLayout, setRecordLayout] = useState<'grid' | 'reading' | 'date'>('grid')
+  const [pageVisible, setPageVisible] = useState(() => !document.hidden)
+  const [quickOpen, setQuickOpen] = useState(false), [tagPickerOpen, setTagPickerOpen] = useState(false)
+  const [locateRequest, setLocateRequest] = useState<LocateRequest | null>(null)
+  const [wheelEntryId, setWheelEntryId] = useState<string | null>(null)
+  const wheelReturnFocus = useRef<HTMLElement | null>(null), wheelFocusFrame = useRef<number | null>(null)
+  const wheelReturnId = useRef<string | null>(null)
+  const wheelFocusPending = useRef(false)
+  const locateToken = useRef(0), notesRef = useRef(notes)
+  notesRef.current = notes
+  const editHandoff = useRef<ReturnType<typeof createEditHandoff> | null>(null)
+  useEffect(() => () => { if (wheelFocusFrame.current !== null) cancelAnimationFrame(wheelFocusFrame.current) }, [])
+  useEffect(() => {
+    if (wheelEntryId !== null || !wheelFocusPending.current) return
+    wheelFocusPending.current = false
+    wheelFocusFrame.current = requestAnimationFrame(() => {
+      wheelFocusFrame.current = null
+      const currentButton = [...document.querySelectorAll<HTMLButtonElement>('[data-wheel-entry]')]
+        .find(button => button.dataset.wheelEntry === wheelReturnId.current)
+      const target = wheelReturnFocus.current?.isConnected ? wheelReturnFocus.current : currentButton ?? searchRef.current
+      if (!document.querySelector('[role="dialog"]') && target?.isConnected && !target.closest('[inert]')) target.focus({ preventScroll: true })
+    })
+  }, [wheelEntryId])
+  useEffect(() => {
+    const handoff = createEditHandoff({ notes: () => notesRef.current, schedule: run => requestAnimationFrame(run), cancel: frame => cancelAnimationFrame(frame),
+      open: note => setComposer({ type: 'note', note }), missing: () => setToast({ message: '这条记录已不可用' }) })
+    editHandoff.current = handoff
+    return () => { handoff.dispose(); editHandoff.current = null }
+  }, [])
+  const graphSession = useRef<GraphSession>({ positions: new Map(), camera: null, fitted: false })
+  useEffect(() => {
+    const update = () => setPageVisible(!document.hidden)
+    document.addEventListener('visibilitychange', update)
+    return () => document.removeEventListener('visibilitychange', update)
+  }, [])
+  const searchRef = useRef<HTMLInputElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
-  useEffect(() => { if (!isDesktop()) return; loadDesktopData().then(data => { if (data.notes.length || data.transactions.length) { setNotes(data.notes); setTransactions(data.transactions) } setReady(true) }).catch(() => { setReady(true); setToast({message:'本地数据库暂不可用，已使用浏览器存储'}) }) }, [])
-  useEffect(() => { if (!ready) return; saveNotes(notes); if (isDesktop()) saveDesktopData(exportData(notes, transactions)).catch(() => setToast({message:'本地数据库保存失败'})) }, [notes, ready])
-  useEffect(() => { if (!ready) return; saveTransactions(transactions); if (isDesktop()) saveDesktopData(exportData(notes, transactions)).catch(() => setToast({message:'本地数据库保存失败'})) }, [transactions, ready])
+  useEffect(() => { if (!isDesktop()) return; loadDesktopData().then(data => { setNotes(data.notes); setTransactions(data.transactions); setTodos(data.todos); setReady(true) }).catch(() => { setReady(true); setToast({message:'本地数据库暂不可用，已使用浏览器存储'}) }) }, [])
+  useEffect(() => { if (!ready) return; saveNotes(notes); saveTransactions(transactions); saveTodos(todos); if (isDesktop()) saveDesktopData(exportData(notes, transactions, todos)).catch(() => setToast({message:'本地数据库保存失败'})) }, [notes, transactions, todos, ready])
+  useEffect(() => { const timer = setInterval(() => setLocalDay(today()), 60_000); return () => clearInterval(timer) }, [])
+  useEffect(() => { if (!ready || !petShown || !pageVisible || composer || quickOpen || tagPickerOpen || aiOpen || wheelEntryId || !todos.some(item => !item.done && item.dueDate <= localDay)) return; const key = `luma-todo-reminded:${localDay}`; if (!localStorage.getItem(key)) setTodoReminder(true) }, [ready, petShown, pageVisible, composer, quickOpen, tagPickerOpen, aiOpen, wheelEntryId, todos, localDay])
+  useEffect(() => { if (todoReminder && todos.some(item => !item.done && item.dueDate <= localDay)) localStorage.setItem(`luma-todo-reminded:${localDay}`, '1') }, [todoReminder, todos, localDay])
+  useLayoutEffect(() => { if (!todoReminder) return; const panel = reminderPanel.current; reminderReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; reminderClose.current?.focus(); return () => { if (panel?.contains(document.activeElement) && reminderReturnFocus.current?.isConnected) reminderReturnFocus.current.focus(); reminderReturnFocus.current = null } }, [todoReminder])
+  useEffect(() => { if (composer || quickOpen || tagPickerOpen || aiOpen) setTodoReminder(false) }, [composer, quickOpen, tagPickerOpen, aiOpen])
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('luma-theme', theme) }, [theme])
   useEffect(() => localStorage.setItem('luma-pinned-tags', JSON.stringify(pinnedTags)), [pinnedTags])
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), toast.action ? 5000 : 2800); return () => clearTimeout(timer) }, [toast])
-  useEffect(() => { const keys = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); setComposer({ type: 'note' }) } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); document.querySelector<HTMLInputElement>('[data-search]')?.focus() } if (e.key === 'Escape') { setComposer(null); setMobileNav(false) } }; addEventListener('keydown', keys); return () => removeEventListener('keydown', keys) }, [])
+  useEffect(() => localStorage.setItem('luma-ambient-motion', ambientEnabled ? 'on' : 'off'), [ambientEnabled])
+  useEffect(() => localStorage.setItem(PET_VISIBLE_KEY, petShown ? 'on' : 'off'), [petShown])
+  useEffect(() => {
+    const media = matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setReducedMotion(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useEffect(() => {
+    const keys = (event: KeyboardEvent) => {
+      if (ignoreNavigationKey(event)) return
+      if (event.key === 'Escape') {
+        if (composer) setComposer(null)
+        else if (quickOpen) setQuickOpen(false)
+        else if (aiOpen) setAiOpen(false)
+        else if (todoReminder) setTodoReminder(false)
+        else if (tagPickerOpen) setTagPickerOpen(false)
+        else if (wheelEntryId) closeWheel()
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !composer && !aiOpen && !tagPickerOpen && !wheelEntryId) {
+        event.preventDefault()
+        setQuickOpen(true)
+      }
+    }
+    addEventListener('keydown', keys)
+    return () => removeEventListener('keydown', keys)
+  }, [composer, aiOpen, quickOpen, tagPickerOpen, todoReminder, wheelEntryId])
   const activeNotes = useMemo(() => notes.filter(n => !n.deletedAt), [notes])
-  const visibleNotes = useMemo(() => notes.filter(n => { const inView = view === 'trash' ? !!n.deletedAt : !n.deletedAt && (view === 'all' || view === 'today' && n.scheduledDate === today() || view === 'tomorrow' && n.scheduledDate === tomorrow() || view === 'later' && n.status === 'later'); return inView && n.content.toLowerCase().includes(query.toLowerCase()) }), [notes, view, query])
-  const tags = useMemo(() => Array.from(new Set(activeNotes.flatMap(n => tagsFor(n.content)))).slice(0, 10), [activeNotes])
-  const currentMonth = useMemo(() => transactions.filter(t => { const d = new Date(t.createdAt), now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() }), [transactions])
-  const income = currentMonth.filter(t => t.kind === 'income').reduce((s,t) => s+t.amount, 0), expense = currentMonth.filter(t => t.kind === 'expense').reduce((s,t) => s+t.amount, 0)
+  const visibleNotes = useMemo(() => selectNotes(notes, { query, tag: selectedTag, unfinished, trash: view === 'trash' }), [notes, view, query, selectedTag, unfinished])
+  const graph = useNoteGraph(activeNotes, view === 'graph' || !!wheelEntryId)
+  const motionAllowed = ambientEnabled && !reducedMotion && pageVisible && !composer && !quickOpen && !tagPickerOpen && !aiOpen
+  const sortingEnabled = pageVisible && !composer && !quickOpen && !tagPickerOpen && !aiOpen && !wheelEntryId
+  const businessEnabled = sortingEnabled
+  const tags = useMemo(() => collectTags(activeNotes), [activeNotes])
+  const monthKey = today().slice(0, 7)
+  const currentMonth = useMemo(() => selectMonth(transactions), [transactions, monthKey])
+  const { income, expense } = monthTotals(currentMonth)
   const show = (message: string, action?: Toast['action']) => setToast({ message, action })
-  const nav = (next: View) => { setView(next); setMobileNav(false) }
+  const clearFilters = () => { setQuery(''); setSelectedTag(null); setUnfinished(false) }
+  const nav = (next: View) => { editHandoff.current?.cancel(); setWheelEntryId(null); setQuickOpen(false); setTagPickerOpen(false); if (next !== 'graph') setLocateRequest(null); if (next === 'trash') clearFilters(); setView(next) }
+  const selectTag = (tag: string) => { setSelectedTag(tag || null); nav(view === 'graph' ? view : 'all') }
+  const createInView = () => { editHandoff.current?.cancel(); if (view === 'todos') { document.querySelector<HTMLInputElement>('[aria-label="新待办"]')?.focus(); return } setComposer({ type: view === 'ledger' ? 'transaction' : 'note' }) }
+  useEffect(() => { if (composer) editHandoff.current?.cancel() }, [composer])
+  useEffect(() => {
+    if (locateRequest && !currentRecord(notes, locateRequest.id)) {
+      setLocateRequest(null); setToast({ message: '这条记录已不可用' })
+    }
+  }, [notes, locateRequest])
+  useEffect(() => {
+    if (wheelEntryId && !currentRecord(notes, wheelEntryId)) {
+      setWheelEntryId(null); setToast({ message: '这条记录已不可用' })
+      requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }))
+    }
+  }, [notes, wheelEntryId])
+  const openWheel = (id: string, trigger: HTMLButtonElement) => {
+    if (view !== 'all' || !currentRecord(notesRef.current, id)) { show('这条记录已不可用'); return }
+    if (wheelFocusFrame.current !== null) cancelAnimationFrame(wheelFocusFrame.current)
+    wheelFocusFrame.current = null
+    wheelFocusPending.current = false
+    wheelReturnFocus.current = trigger
+    wheelReturnId.current = id
+    editHandoff.current?.cancel(); setWheelEntryId(id)
+  }
+  const closeWheel = () => {
+    if (wheelFocusFrame.current !== null) cancelAnimationFrame(wheelFocusFrame.current)
+    wheelFocusFrame.current = null
+    wheelFocusPending.current = true
+    setWheelEntryId(null)
+  }
+  const openWheelRecord = (id: string) => {
+    if (!currentRecord(notesRef.current, id)) { show('这条记录已不可用'); return }
+    if (wheelFocusFrame.current !== null) cancelAnimationFrame(wheelFocusFrame.current)
+    wheelFocusFrame.current = null
+    wheelFocusPending.current = false
+    setWheelEntryId(null); editHandoff.current?.open(id)
+  }
+  // Local requests open one-hop relations without changing caller filter policy.
+  const requestLocate = (id: string, clearBlockingFilters: boolean, local = false) => {
+    editHandoff.current?.cancel()
+    if (!currentRecord(notesRef.current, id)) { show('这条记录已不可用'); return }
+    if (clearBlockingFilters) { clearFilters(); show('已清除筛选并在图中定位') }
+    setView('graph'); setLocateRequest({ id, token: ++locateToken.current, local })
+  }
+  const openRecord = (id: string, action: 'edit' | 'graph') => {
+    editHandoff.current?.cancel()
+    if (!currentRecord(notesRef.current, id)) { show('这条记录已不可用'); return }
+    setQuickOpen(false)
+    if (action === 'edit') editHandoff.current?.open(id)
+    else requestLocate(id, true)
+  }
+  const finishLocate = (result: LocateResult) => {
+    setLocateRequest(current => current?.token === result.token ? null : current)
+    if (!result.ok && locateRequest?.token === result.token) show('这条记录暂无法定位，请重新查找')
+  }
+  async function copyBody(text: string) {
+    try { await navigator.clipboard.writeText(text); show('正文已复制') }
+    catch { show('复制未完成，请打开记录后选择正文复制') }
+  }
   const togglePinTag = (tag: string) => setPinnedTags(items => items.includes(tag) ? items.filter(item => item !== tag) : [...items, tag])
+  const reorderNotes = (orderedIds: string[], expectedIds: string[]) => {
+    if (view !== 'all' || !sortingEnabled) return
+    setNotes(current => {
+      const filtered = selectNotes(current, { query, tag: selectedTag, unfinished, trash: false })
+      return reorderInCurrentView(current, filtered, recordLayout, expectedIds, orderedIds)
+    })
+  }
   function saveNote(draft: Omit<Note, 'id' | 'createdAt'>, id?: string) { const now = new Date().toISOString(); id ? setNotes(v => v.map(n => n.id === id ? { ...n, ...draft, updatedAt: now } : n)) : setNotes(v => [{ ...draft, id: crypto.randomUUID(), createdAt: now, updatedAt: now }, ...v]); setComposer(null); show(id ? '记录已更新' : '已保存到你的记录') }
   function saveTransaction(draft: Omit<Transaction, 'id' | 'createdAt'>, id?: string) { const now = new Date().toISOString(); id ? setTransactions(v => v.map(t => t.id === id ? { ...t, ...draft, updatedAt: now } : t)) : setTransactions(v => [{ ...draft, id: crypto.randomUUID(), createdAt: now, updatedAt: now }, ...v]); setComposer(null); show(id ? '账目已更新' : '账目已保存') }
-  function exportBackup() { const blob = new Blob([JSON.stringify(exportData(notes, transactions), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `晴笺备份-${today()}.json`; link.click(); URL.revokeObjectURL(url); show('备份文件已生成') }
-  async function importBackup(file?: File) { if (!file) return; try { const backup = parseBackup(JSON.parse(await file.text())); setNotes(backup.notes); setTransactions(backup.transactions); show('数据已成功导入') } catch { show('导入失败：请选择晴笺备份文件') } finally { if (importRef.current) importRef.current.value = '' } }
-  const count = (date: string) => activeNotes.filter(n => n.scheduledDate === date && !n.done).length
+  function exportBackup() { const blob = new Blob([JSON.stringify(exportData(notes, transactions, todos), null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `晴笺备份-${today()}.json`; link.click(); URL.revokeObjectURL(url); show('备份文件已生成') }
+  async function importBackup(file?: File) { if (!file) return; try { const { data, keptExistingTodos } = importBackupData(JSON.parse(await file.text()), todos); setNotes(data.notes); setTransactions(data.transactions); setTodos(data.todos); show(keptExistingTodos ? '旧版备份已导入，当前待办已保留' : '记录、待办和账目已成功导入') } catch { show('导入失败：请选择晴笺备份文件') } finally { if (importRef.current) importRef.current.value = '' } }
   const trashNote = (id:string) => { setNotes(v=>v.map(n=>n.id===id?{...n,deletedAt:new Date().toISOString()}:n)); show('已移至回收站',{label:'撤销',run:()=>{setNotes(v=>v.map(n=>n.id===id?{...n,deletedAt:undefined}:n));setToast(null)}}) }
   const restoreNote = (id:string) => { setNotes(v=>v.map(n=>n.id===id?{...n,deletedAt:undefined}:n)); show('记录已恢复') }
   const deleteForever = (id:string) => show('永久删除后无法恢复',{label:'确认删除',run:()=>{setNotes(v=>v.filter(n=>n.id!==id));setToast({message:'记录已永久删除'})}})
-  return <main className="app-shell"><aside className={mobileNav ? 'sidebar is-open' : 'sidebar'}><div className="brand"><span className="brand-mark"><Sparkles size={17}/></span><span>晴笺</span><button className="mobile-close" onClick={() => setMobileNav(false)}><X size={20}/></button></div><button className="new-button" onClick={() => setComposer({type:'note'})}><Plus size={18}/>新建记录 <span>⌘↵</span></button><nav><p className="nav-label">我的一天</p><Nav icon={<CalendarDays/>} text="今天" count={count(today())} selected={view==='today'} onClick={() => nav('today')}/><Nav icon={<Clock3/>} text="明天" count={count(tomorrow())} selected={view==='tomorrow'} onClick={() => nav('tomorrow')}/><Nav icon={<Inbox/>} text="准备中" count={activeNotes.filter(n=>n.status==='later'&&!n.done).length} selected={view==='later'} onClick={() => nav('later')}/><Nav icon={<LayoutList/>} text="所有记录" selected={view==='all'} onClick={() => nav('all')}/><Nav icon={<Trash2/>} text="回收站" count={notes.filter(n=>n.deletedAt).length} selected={view==='trash'} onClick={() => nav('trash')}/><p className="nav-label second">生活账本</p><Nav icon={<WalletCards/>} text="本月账本" selected={view==='ledger'} onClick={() => nav('ledger')}/>{pinnedTags.length>0&&<div className="pinned-tags"><p className="nav-label second">固定标签</p>{pinnedTags.map(tag=><div key={tag}><button onClick={()=>{setQuery(tag);nav('all')}}><span>{tag}</span></button><button title="取消固定" onClick={()=>togglePinTag(tag)}><PinOff size={13}/></button></div>)}</div>}</nav><div className="sidebar-footer"><div className="avatar">Z</div><span>我的空间</span><button onClick={() => nav('settings')}><Settings size={16}/></button></div></aside><section className="workspace"><header className="topbar"><button className="menu-button" onClick={() => setMobileNav(true)}><Menu/></button><label className="search"><Search size={18}/><input data-search value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索记录和标签"/><span>⌘ K</span></label><button className="ai-button" onClick={() => setAiOpen(true)}><Sparkles size={17}/>AI</button><button className="theme-button" onClick={() => setTheme(v=>v==='light'?'dark':'light')}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button className="icon-button" onClick={() => setComposer({type:'note'})}><Plus size={21}/></button></header>{view==='ledger'?<Ledger items={transactions} income={income} expense={expense} onAdd={()=>setComposer({type:'transaction'})} onEdit={item=>setComposer({type:'transaction',item})} onDelete={id=>{setTransactions(v=>v.filter(t=>t.id!==id));show('账目已删除')}}/>:view==='settings'?<SettingsView theme={theme} onTheme={()=>setTheme(v=>v==='light'?'dark':'light')} onExport={exportBackup} onImport={()=>importRef.current?.click()}/>:<NotesView view={view} notes={visibleNotes} tags={tags} pinnedTags={pinnedTags} query={query} isTrash={view==='trash'} onCreate={()=>setComposer({type:'note'})} onToggle={id=>setNotes(v=>v.map(n=>n.id===id?{...n,done:!n.done}:n))} onEdit={note=>setComposer({type:'note',note})} onDelete={trashNote} onRestore={restoreNote} onDeleteForever={deleteForever} onTag={tag=>{setQuery(tag);nav('all')}} onPinTag={togglePinTag}/>}</section><input ref={importRef} className="visually-hidden" type="file" accept="application/json" onChange={e=>importBackup(e.target.files?.[0])}/>{composer?.type==='note'&&<NoteComposer note={composer.note} defaultStatus={view==='today'?'today':view==='tomorrow'?'tomorrow':view==='later'?'later':'none'} onClose={()=>setComposer(null)} onSave={saveNote}/>} {composer?.type==='transaction'&&<LedgerComposer item={composer.item} onClose={()=>setComposer(null)} onSave={saveTransaction}/>} {aiOpen&&<AiPanel notes={activeNotes} transactions={transactions} onClose={()=>setAiOpen(false)} onToast={show}/>} {toast&&<div className="toast"><span>{toast.message}</span>{toast.action&&<button onClick={toast.action.run}>{toast.action.label}</button>}</div>}</main>
+  const deleteTodo = (id: string) => {
+    const index = todos.findIndex(item => item.id === id), item = todos[index]
+    if (!item) return
+    setTodos(items => items.filter(todo => todo.id !== id))
+    show('待办已删除', { label: '撤销', run: () => { setTodos(items => { if (items.some(todo => todo.id === id)) return items; const restored = [...items]; restored.splice(Math.min(index, restored.length), 0, item); return restored }); setToast(null) } })
+  }
+  const editLatestNote = (id: string) => {
+    editHandoff.current?.cancel()
+    const note = currentRecord(notesRef.current, id)
+    if (note) setComposer({ type: 'note', note })
+  }
+  let viewContent: React.ReactNode
+  if (view === 'todos') {
+    viewContent = <TodoView items={todos} onAdd={(title, dueDate) => { const now = new Date().toISOString(); setTodos(items => [{ id: crypto.randomUUID(), title, dueDate, done: false, createdAt: now }, ...items]) }}
+      onChange={(id, title, dueDate) => setTodos(items => items.map(item => item.id === id ? { ...item, title, dueDate, updatedAt: new Date().toISOString() } : item))}
+      onToggle={id => setTodos(items => items.map(item => item.id === id ? { ...item, done: !item.done, updatedAt: new Date().toISOString() } : item))}
+      onDelete={deleteTodo}/>
+  } else if (view === 'ledger') {
+    viewContent = <Ledger items={currentMonth} income={income} expense={expense}
+      onAdd={() => setComposer({ type: 'transaction' })}
+      onEdit={item => setComposer({ type: 'transaction', item })}
+      onDelete={id => { setTransactions(items => items.filter(item => item.id !== id)); show('账目已删除') }}/>
+  } else if (view === 'settings') {
+    viewContent = <SettingsView ambientEnabled={ambientEnabled} reducedMotion={reducedMotion}
+      onAmbient={() => setAmbientEnabled(value => !value)} theme={theme}
+      petShown={petShown} onPet={() => setPetShown(value => !value)} petName={PET_CHARACTER_NAMES[petAppearance.character]}
+      onTheme={() => setTheme(value => value === 'light' ? 'dark' : 'light')}
+      onOpenWardrobe={() => nav('pet')}
+      onExport={exportBackup} onImport={() => importRef.current?.click()}/>
+  } else if (view === 'pet') {
+    viewContent = <div className="content pet-workspace">
+      <div className="heading"><div><p className="eyebrow">你的本机伙伴</p><h1>伙伴</h1>
+        <p className="subtle">挑选角色与装扮，穿上后陪你记录。</p></div></div>
+      <PetShowcase theme={theme} motionAllowed={motionAllowed} visible={pageVisible}
+        businessEnabled={businessEnabled} appearance={petAppearance} onApplyAppearance={applyPetAppearance}/>
+    </div>
+  } else if (view === 'garden') {
+    viewContent = <Suspense fallback={<div className="content" role="status">正在打开记录时光…</div>}>
+      <RecordGarden notes={activeNotes} renderNote={note => renderMarkdown(withoutTags(note.content) || '仅标签记录')}
+        onOpenNote={editLatestNote} onCreate={createInView} animate={motionAllowed && pageVisible && businessEnabled}
+        companionName={PET_CHARACTER_NAMES[petAppearance.character]}
+        renderCompanionFigure={localAnimate => <PetPortrait appearance={petAppearance} mood="idle" animate={localAnimate}/>}/>
+    </Suspense>
+  } else if (view === 'graph') {
+    viewContent = <Suspense fallback={<div className="content" role="status">正在打开关联图…</div>}>
+      <NoteGraph notes={visibleNotes} graph={graph} session={graphSession} theme={theme}
+        animate={motionAllowed} visible={pageVisible} enabled={ambientEnabled}
+        onMotion={() => setAmbientEnabled(value => !value)} onCreate={() => setComposer({ type: 'note' })}
+        onEdit={editLatestNote} onDelete={trashNote}
+        locateRequest={locateRequest} onLocateResult={finishLocate} onLocate={id => requestLocate(id, false)}
+        filters={{ query, selectedTag, unfinished, tags, onTag: selectTag, onPickTags: () => setTagPickerOpen(true), count: visibleNotes.length, onUnfinished: setUnfinished, onClear: clearFilters }}/>
+    </Suspense>
+  } else {
+    viewContent = <NotesView layout={recordLayout} onLayout={setRecordLayout} view={view}
+      dataVersion={notes} businessEnabled={sortingEnabled} motionAllowed={motionAllowed}
+      onReorder={reorderNotes} onPin={id => setNotes(current => toggleNotePin(current, id))}
+      notes={visibleNotes} tags={tags} pinnedTags={pinnedTags} query={query} selectedTag={selectedTag}
+      unfinished={unfinished} onUnfinished={setUnfinished} onClear={clearFilters} onCopy={copyBody}
+      onPickTags={() => setTagPickerOpen(true)}
+      isTrash={view === 'trash'} onCreate={() => setComposer({ type: 'note' })}
+      onToggle={id => setNotes(items => items.map(note => note.id === id ? { ...note, done: !note.done } : note))}
+      onEdit={note => editLatestNote(note.id)} onOpenWheel={openWheel} onDelete={trashNote} onRestore={restoreNote}
+      onDeleteForever={deleteForever} onTag={selectTag} onPinTag={togglePinTag}/>
+  }
+  return <SoftInteraction allowed={motionAllowed}><main className={`app-shell${motionAllowed ? '' : ' motion-disabled'}`}>
+    <div className="workbench-light" aria-hidden="true"><i/><i/><i/></div>
+    {isDesktop() && <div className="desktop-titlebar" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}><div className="desktop-drag" data-tauri-drag-region onDoubleClick={() => void getCurrentWindow().toggleMaximize()}><Sparkles size={14}/><span data-tauri-drag-region>晴笺</span></div><div className="desktop-controls"><button aria-label="最小化窗口" onClick={() => void getCurrentWindow().minimize()}><Minus size={16}/></button><button aria-label="最大化或还原窗口" onClick={() => void getCurrentWindow().toggleMaximize()}><Square size={12}/></button><button aria-label="关闭窗口" onClick={() => void getCurrentWindow().close()}><X size={16}/></button></div></div>}
+    <header className="workbench-header" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}>
+      <div className="brand"><span className="brand-mark"><Sparkles size={17}/></span><span>晴笺<small>留一点晴朗，给自己</small></span></div>
+      <nav aria-label="主导航">
+        <Nav icon={<LayoutList/>} text="记录" selected={view==='all'} onClick={()=>nav('all')}/>
+        <Nav icon={<CheckSquare/>} text="待办" selected={view==='todos'} onClick={()=>nav('todos')}/>
+        <Nav icon={<CalendarDays/>} text="记录时光" selected={view==='garden'} onClick={()=>nav('garden')}/>
+        <Nav icon={<Network/>} text="关联图" selected={view==='graph'} onClick={()=>nav('graph')}/>
+        <Nav icon={<Sparkles/>} text="伙伴" selected={view==='pet'} onClick={()=>nav('pet')}/>
+        <Nav icon={<WalletCards/>} text="账本" selected={view==='ledger'} onClick={()=>nav('ledger')}/>
+      </nav>
+      <div className="workbench-utilities"><span className="local-status"><span className="local-dot"/>记录留在本机</span><SoftButton className={view==='trash'?'active':''} onClick={()=>nav('trash')}><Trash2 size={16}/>回收站</SoftButton><SoftButton className={view==='settings'?'active':''} onClick={()=>nav('settings')}><Settings size={16}/>设置</SoftButton><SoftButton className="new-button" onClick={createInView}><Plus size={17}/>{view==='ledger'?'记一笔':view==='todos'?'添加待办':'新建记录'}</SoftButton></div>
+    </header>
+    {pinnedTags.length>0 && <div className="quick-tags" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}>{pinnedTags.map(tag=><span key={tag}><button onClick={()=>selectTag(tag)}># {tag}</button><button aria-label={`取消固定${tag}`} onClick={()=>togglePinTag(tag)}><PinOff size={13}/></button></span>)}</div>}
+    <section className="workspace" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}>
+      <header className="topbar">
+        {view==='all'||view==='trash'||view==='graph'?<div className="search"><Search size={18}/><input ref={searchRef} aria-label="搜索记录" data-search value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索记录和标签"/>{query&&<button aria-label="清除搜索" onClick={()=>setQuery('')}><X size={15}/></button>}</div>:<button className="search-link" onClick={()=>{nav('all');requestAnimationFrame(()=>searchRef.current?.focus())}}><Search size={17}/>查找记录</button>}
+        <div className="topbar-actions"><SoftButton className="quick-open-button" aria-label="快速打开" disabled={!!composer || aiOpen || tagPickerOpen} onClick={() => setQuickOpen(true)}><Search size={16}/><span>快速打开</span><kbd>Ctrl K</kbd></SoftButton><SoftButton className="ai-button" aria-label="打开晴笺 AI" onClick={() => { editHandoff.current?.cancel(); setAiOpen(true) }}><Sparkles size={17}/><span>晴笺 AI</span></SoftButton><SoftButton aria-label={theme==='light'?'使用深色':'使用浅色'} className="theme-button" onClick={() => setTheme(v=>v==='light'?'dark':'light')}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</SoftButton></div>
+      </header>
+      {viewContent}
+    </section>
+    <PetCompanion theme={theme} motionAllowed={motionAllowed} visible={pageVisible} businessEnabled={businessEnabled}
+      appearance={petAppearance} onOpenNotes={() => setQuickOpen(true)} onOpenTodos={() => setTodoReminder(true)}
+      shown={petShown} hidden={!!wheelEntryId || view === 'settings' || view === 'pet' || view === 'garden' || view === 'graph'} onHide={() => setPetShown(false)}/>
+    <input ref={importRef} className="visually-hidden" type="file" accept="application/json" disabled={!!wheelEntryId} onChange={e=>importBackup(e.target.files?.[0])}/>
+    {wheelEntryId && <Modal title="记录年轮" className="celestial-wheel-frame" onClose={closeWheel}><Suspense fallback={<p role="status">正在打开记录年轮…</p>}><CelestialNoteWheel entryId={wheelEntryId} notes={activeNotes} graph={graph} theme={theme}
+      motionAllowed={motionAllowed} visible={pageVisible} businessEnabled={!composer && !quickOpen && !tagPickerOpen && !aiOpen && !todoReminder}
+      onClose={closeWheel} onOpenNote={openWheelRecord}/></Suspense></Modal>}
+    {composer?.type==='note'&&<NoteComposer note={composer.note} availableTags={tags} onClose={()=>setComposer(null)} onSave={saveNote}/>}
+    {composer?.type==='transaction'&&<LedgerComposer item={composer.item} onClose={()=>setComposer(null)} onSave={saveTransaction}/>}
+    {aiOpen&&<AiPanel notes={activeNotes} transactions={transactions} onClose={()=>setAiOpen(false)} onToast={show}/>}
+    {quickOpen&&<QuickOpen notes={activeNotes} onClose={() => setQuickOpen(false)} onOpen={openRecord}/>}
+    {todoReminder && <div ref={reminderPanel} className="todo-reminder" role="dialog" aria-label="今日待办"><div><b>今天的小清单</b><button ref={reminderClose} aria-label="关闭今日待办" onClick={() => setTodoReminder(false)}><X size={16}/></button></div>{todos.filter(item => !item.done && item.dueDate <= localDay).length ? <ul>{todos.filter(item => !item.done && item.dueDate <= localDay).slice(0, 5).map(item => <li key={item.id}>{item.title}</li>)}</ul> : <p>今天没有未完成的待办。</p>}<button className="todo-reminder-open" onClick={() => { setTodoReminder(false); nav('todos') }}>打开待办清单</button></div>}
+    {tagPickerOpen&&<TagPicker tags={tags} selected={selectedTag} onTag={selectTag} onClose={() => setTagPickerOpen(false)}/>}
+    {toast&&<div role="status" className="toast" inert={!!wheelEntryId}><span>{toast.message}</span>{toast.action&&<button onClick={toast.action.run}>{toast.action.label}</button>}</div>}
+  </main></SoftInteraction>
 }
 
-function Nav({icon,text,count,selected,onClick}:{icon:React.ReactNode;text:string;count?:number;selected:boolean;onClick:()=>void}) { return <button className={selected?'nav-item active':'nav-item'} onClick={onClick}>{icon}<span>{text}</span>{count?<em>{count}</em>:null}</button> }
-function NotesView({view,notes,tags,pinnedTags,query,isTrash,onCreate,onToggle,onEdit,onDelete,onRestore,onDeleteForever,onTag,onPinTag}:{view:Exclude<View,'ledger'|'settings'>;notes:Note[];tags:string[];pinnedTags:string[];query:string;isTrash:boolean;onCreate:()=>void;onToggle:(id:string)=>void;onEdit:(n:Note)=>void;onDelete:(id:string)=>void;onRestore:(id:string)=>void;onDeleteForever:(id:string)=>void;onTag:(tag:string)=>void;onPinTag:(tag:string)=>void}) { const title=query?`搜索 “${query}”`:labels[view]; const help=view==='today'?'把心思留给当下，慢慢完成就好。':view==='tomorrow'?'给明天留一点从容。':view==='later'?'还不急，先把它放在这里。':view==='trash'?'误删的内容可以在这里找回来。':'所有值得被记住的片段。'; return <div className="content"><div className="heading"><div><p className="eyebrow">{view==='today'?dateLabel(today()):isTrash?'安全与恢复':'我的记录'}</p><h1>{title}</h1><p className="subtle">{help}</p></div>{!isTrash&&<button className="soft-button" onClick={onCreate}><Plus size={18}/>记录</button>}</div>{view==='today'&&!query&&<div className="focus-card"><span className="sun">✦</span><div><b>今日微光</b><p>从一件最小的事开始，就已经很好。</p></div></div>}{notes.length?<div className="note-list">{notes.map(note=><NoteCard key={note.id} note={note} trash={isTrash} onToggle={()=>onToggle(note.id)} onEdit={()=>onEdit(note)} onDelete={()=>onDelete(note.id)} onRestore={()=>onRestore(note.id)} onDeleteForever={()=>onDeleteForever(note.id)}/>)}</div>:isTrash?<div className="empty"><span>✓</span><h2>回收站是空的</h2><p>这里很干净，也很安心。</p></div>:<Empty onCreate={onCreate}/>} {tags.length>0&&!query&&!isTrash&&<section className="tags-section"><p className="section-title"><Hash size={15}/>标签</p><div>{tags.map(tag=><span className={pinnedTags.includes(tag)?'tag-chip is-pinned':'tag-chip'} key={tag}><button onClick={()=>onTag(tag)}>{tag}</button><button title={pinnedTags.includes(tag)?'取消固定':'固定到侧栏'} onClick={()=>onPinTag(tag)}>{pinnedTags.includes(tag)?<PinOff size={13}/>:<Pin size={13}/>}</button></span>)}</div></section>}</div> }
-function Empty({onCreate}:{onCreate:()=>void}) { return <div className="empty"><span>✦</span><h2>这里还很安静</h2><p>写下第一件想记住的事吧。</p><button className="soft-button" onClick={onCreate}><Plus size={17}/>开始记录</button></div> }
-function renderInline(value: string) {
-  const parts: React.ReactNode[] = []; const token = /(\*\*(.+?)\*\*|_(.+?)_|`(.+?)`|\[\[color:(red|orange|green|blue|purple)\|(.+?)\]\]|\[\[size:(sm|lg|xl)\|(.+?)\]\])/g; let cursor = 0; let match: RegExpExecArray | null; let key = 0
-  while ((match = token.exec(value))) { if (match.index > cursor) parts.push(value.slice(cursor, match.index)); const [full,,bold,italic,code,color,colorText,size,sizeText] = match; if (bold) parts.push(<strong key={key++}>{bold}</strong>); else if (italic) parts.push(<em key={key++}>{italic}</em>); else if (code) parts.push(<code key={key++}>{code}</code>); else if (color) parts.push(<span key={key++} className={`text-color ${color}`}>{colorText}</span>); else if (size) parts.push(<span key={key++} className={`text-size ${size}`}>{sizeText}</span>); else parts.push(full); cursor = match.index + full.length }
-  if (cursor < value.length) parts.push(value.slice(cursor)); return parts
-}
-function renderMarkdown(value: string) {
-  const lines = value.replace(/<\/?kbd>/g, '').split('\n'); const blocks: React.ReactNode[] = []; let codeLines: string[] = []; let inCode = false
-  lines.forEach((line, i) => { if (line.trim().startsWith('```')) { if (inCode) { blocks.push(<pre key={`code-${i}`}><code>{codeLines.join('\n')}</code></pre>); codeLines=[] } inCode=!inCode; return } if (inCode) { codeLines.push(line); return } if (line.startsWith('# ')) blocks.push(<h2 key={i}>{renderInline(line.slice(2))}</h2>); else if (line.startsWith('## ')) blocks.push(<h3 key={i}>{renderInline(line.slice(3))}</h3>); else if (line.startsWith('- ')) blocks.push(<div className="md-list" key={i}>• {renderInline(line.slice(2))}</div>); else if (line.trim()) blocks.push(<p key={i}>{renderInline(line)}</p>) })
-  if (codeLines.length) blocks.push(<pre key="code-last"><code>{codeLines.join('\n')}</code></pre>); return blocks
-}
-function NoteCard({note,trash,onToggle,onEdit,onDelete,onRestore,onDeleteForever}:{note:Note;trash:boolean;onToggle:()=>void;onEdit:()=>void;onDelete:()=>void;onRestore:()=>void;onDeleteForever:()=>void}) { const tags=tagsFor(note.content), content=note.content.replace(/#[\p{L}\p{N}_-]+/gu,'').trim(); return <article className={note.done?'note-card done':'note-card'}>{!trash&&<button className="check" onClick={onToggle}>{note.done&&<Check size={13}/>}</button>}<button className="note-body" onClick={trash?onRestore:onEdit}><div className="markdown-preview">{renderMarkdown(content||'仅标签记录')}</div><div className="note-meta">{tags.map(tag=><span key={tag}>{tag}</span>)}<time>{trash&&note.deletedAt?'删除于 '+new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric'}).format(new Date(note.deletedAt)):note.scheduledDate?dateLabel(note.scheduledDate):new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric'}).format(new Date(note.createdAt))}</time></div></button><div className="note-actions">{trash?<><button title="恢复" onClick={onRestore}><RotateCcw size={15}/></button><button title="永久删除" onClick={onDeleteForever}><Trash2 size={15}/></button></>:<><button title="编辑" onClick={onEdit}><Pencil size={15}/></button><button title="移至回收站" onClick={onDelete}><Trash2 size={15}/></button></>}</div></article> }
-function Modal({children,onClose}:{children:React.ReactNode;onClose:()=>void}) { return <div className="modal-backdrop" onMouseDown={onClose}><div onMouseDown={e=>e.stopPropagation()}>{children}</div></div> }
-const escapeHtml = (value:string) => value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-function inlineToHtml(value:string) {
-  return escapeHtml(value)
-    .replace(/\[\[color:(red|orange|green|blue|purple)\|(.+?)\]\]/g,'<span data-color="$1" class="text-color $1">$2</span>')
-    .replace(/\[\[size:(sm|lg|xl)\|(.+?)\]\]/g,'<span data-size="$1" class="text-size $1">$2</span>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/_(.+?)_/g,'<em>$1</em>')
-    .replace(/`(.+?)`/g,'<code>$1</code>')
-}
-function markdownToEditorHtml(value:string) {
-  if(!value)return ''
-  const lines=value.replace(/<\/?kbd>/g,'').split('\n'); const output:string[]=[]; let code:string[]=[]; let inCode=false
-  lines.forEach(line=>{ if(line.trim().startsWith('```')){ if(inCode){output.push(`<pre>${escapeHtml(code.join('\n'))}</pre>`);code=[]} inCode=!inCode;return } if(inCode){code.push(line);return} if(line.startsWith('# '))output.push(`<h2>${inlineToHtml(line.slice(2))}</h2>`); else if(line.startsWith('## '))output.push(`<h3>${inlineToHtml(line.slice(3))}</h3>`); else if(line.startsWith('- '))output.push(`<div class="visual-list">• ${inlineToHtml(line.slice(2))}</div>`); else output.push(line?`<div>${inlineToHtml(line)}</div>`:'<div><br></div>') })
-  if(code.length)output.push(`<pre>${escapeHtml(code.join('\n'))}</pre>`); return output.join('')
-}
-function editorHtmlToMarkdown(root:HTMLElement) {
-  const walk=(node:Node):string=>{ if(node.nodeType===Node.TEXT_NODE)return node.textContent??''; if(!(node instanceof HTMLElement))return ''; const body=Array.from(node.childNodes).map(walk).join(''); const tag=node.tagName.toLowerCase(); if(tag==='br')return '\n'; if(tag==='strong'||tag==='b')return `**${body}**`; if(tag==='em'||tag==='i')return `_${body}_`; if(tag==='code'&&node.parentElement?.tagName.toLowerCase()!=='pre')return `\`${body}\``; if(tag==='span'){const color=node.dataset.color;const size=node.dataset.size;return color?`[[color:${color}|${body}]]`:size?`[[size:${size}|${body}]]`:body} if(tag==='font'){const color=node.dataset.color;const size=node.getAttribute('size');return color?`[[color:${color}|${body}]]`:size?`[[size:lg|${body}]]`:body} if(tag==='h2')return `# ${body}\n`; if(tag==='h3')return `## ${body}\n`; if(tag==='pre')return `\`\`\`\n${node.innerText}\n\`\`\`\n`; if(tag==='div'||tag==='p')return `${node.classList.contains('visual-list')?'- '+body.replace(/^•\s*/, ''):body}\n`; return body }
-  return Array.from(root.childNodes).map(walk).join('').replace(/\n{3,}/g,'\n\n').trimEnd()
-}
-function NoteComposer({note,defaultStatus,onClose,onSave}:{note?:Note;defaultStatus:NoteStatus;onClose:()=>void;onSave:(draft:Omit<Note,'id'|'createdAt'>,id?:string)=>void}) {
-  const draftKey=note?.id??'new',draft=useMemo(()=>loadNoteDraft(draftKey),[draftKey])
-  const initialContent=draft?.content??note?.content??'',initialLater=draft?.status==='later'||(!draft&&(note?.status==='later'||defaultStatus==='later'))
-  const [content,setContent]=useState(initialContent),[date,setDate]=useState(draft?.scheduledDate??note?.scheduledDate??(defaultStatus==='today'?today():defaultStatus==='tomorrow'?tomorrow():today())),[later,setLater]=useState(initialLater),[picker,setPicker]=useState(false); const ref=useRef<HTMLDivElement>(null)
-  useEffect(()=>{if(ref.current)ref.current.innerHTML=markdownToEditorHtml(initialContent);setTimeout(()=>ref.current?.focus(),30)},[])
-  useEffect(()=>{const originalDate=note?.scheduledDate??(defaultStatus==='tomorrow'?tomorrow():today()),originalLater=note?.status==='later'||defaultStatus==='later',unchanged=!!note&&content===note.content&&later===originalLater&&(later||date===originalDate);if(content.trim()&&!unchanged)saveNoteDraft({content,status:later?'later':'none',scheduledDate:later?undefined:date,savedAt:new Date().toISOString()},draftKey);else clearNoteDraft(draftKey)},[content,date,later,draftKey])
-  const commit=()=>{if(content.trim()){clearNoteDraft(draftKey);onSave({content:content.trim(),status:later?'later':'none',scheduledDate:later?undefined:date,done:note?.done??false,deletedAt:note?.deletedAt},note?.id)}}
-  return <Modal onClose={onClose}><section className="composer rich-composer"><header><div><span>{note?'编辑记录':'新建记录'}</span><small>{content.trim()?'草稿已自动保存在本机':'写下内容，样式会直接呈现'}</small></div><button aria-label="关闭" onClick={onClose}><X size={21}/></button></header><EditorToolbar editorRef={ref} onChange={()=>ref.current&&setContent(editorHtmlToMarkdown(ref.current))}/><div ref={ref} className="visual-editor" contentEditable suppressContentEditableWarning data-placeholder="此刻想记下什么？" onInput={e=>setContent(editorHtmlToMarkdown(e.currentTarget))} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();e.stopPropagation();commit()}}}/><p className="editor-hint">输入 #标签，之后查找会更轻松</p><div className="schedule-row"><button className="date-trigger" onClick={()=>{setPicker(v=>!v);setLater(false)}}><CalendarDays size={16}/>{dateLabel(date)}</button><button className={later?'schedule-pill selected':'schedule-pill'} onClick={()=>{setLater(v=>!v);setPicker(false)}}>准备中</button></div>{picker&&<DateWheelPicker value={date} onChange={value=>{setDate(value);setLater(false)}}/>}<footer><span><b>Ctrl/⌘ + Enter</b> 快速保存</span><button className="save" disabled={!content.trim()} onClick={commit}>保存记录</button></footer></section></Modal>
-}
-function EditorToolbar({editorRef,onChange}:{editorRef:React.RefObject<HTMLDivElement|null>;onChange:()=>void}) { const run=(command:string,value?:string)=>{editorRef.current?.focus();document.execCommand(command,false,value);onChange()}; const color=(name:string,value:string)=>{editorRef.current?.focus();document.execCommand('foreColor',false,value); const selection=getSelection(); const parent=selection?.anchorNode?.parentElement; if(parent?.tagName.toLowerCase()==='font'){parent.dataset.color=name;parent.className=`text-color ${name}`} onChange()}; return <div className="editor-toolbar" onMouseDown={e=>e.preventDefault()}><button title="标题" aria-label="标题" onClick={()=>run('formatBlock','h2')}><Heading1 size={18}/></button><i/><button title="粗体" aria-label="粗体" onClick={()=>run('bold')}><Bold size={17}/></button><button title="斜体" aria-label="斜体" onClick={()=>run('italic')}><Italic size={17}/></button><i/><button title="暖红色" aria-label="暖红色" className="color red" onClick={()=>color('red','#bd6257')}><Palette size={16}/></button><button title="柔蓝色" aria-label="柔蓝色" className="color blue" onClick={()=>color('blue','#527fac')}><Palette size={16}/></button><button title="大号文字" aria-label="大号文字" onClick={()=>run('fontSize','5')}><Type size={17}/></button><span className="toolbar-tip">选中文字后设置样式</span></div> }
-function DateWheelPicker({value,onChange}:{value:string;onChange:(value:string)=>void}) { const initial=new Date(`${value}T12:00:00`); const current=Number.isNaN(initial.valueOf())?new Date():initial; const y=current.getFullYear(),m=current.getMonth()+1,d=current.getDate(); const years=Array.from({length:13},(_,i)=>new Date().getFullYear()-5+i),months=Array.from({length:12},(_,i)=>i+1),days=Array.from({length:new Date(y,m,0).getDate()},(_,i)=>i+1); const change=(part:'y'|'m'|'d',num:number)=>{const nextY=part==='y'?num:y,nextM=part==='m'?num:m,nextD=Math.min(part==='d'?num:d,new Date(nextY,nextM,0).getDate()); onChange(dateKey(new Date(nextY,nextM-1,nextD)))}; return <div className="wheel-picker"><Wheel label="年" values={years} selected={y} onChange={n=>change('y',n)}/><Wheel label="月" values={months} selected={m} onChange={n=>change('m',n)}/><Wheel label="日" values={days} selected={d} onChange={n=>change('d',n)}/></div> }
-function Wheel({label,values,selected,onChange}:{label:string;values:number[];selected:number;onChange:(n:number)=>void}) { const ref=useRef<HTMLDivElement>(null); useEffect(()=>{ref.current?.querySelector<HTMLElement>('[data-selected="true"]')?.scrollIntoView({block:'center',behavior:'smooth'})},[selected]); return <div className="wheel"><b>{label}</b><div ref={ref} onWheel={e=>{e.preventDefault(); const index=values.indexOf(selected),next=values[Math.max(0,Math.min(values.length-1,index+(e.deltaY>0?1:-1)))]; if(next!==selected)onChange(next)}}>{values.map(n=><button data-selected={n===selected} className={n===selected?'selected':''} key={n} onClick={()=>onChange(n)}>{n}</button>)}</div></div> }
-function Ledger({items,income,expense,onAdd,onEdit,onDelete}:{items:Transaction[];income:number;expense:number;onAdd:()=>void;onEdit:(t:Transaction)=>void;onDelete:(id:string)=>void}) { const cats=Object.entries(items.filter(t=>t.kind==='expense').reduce<Record<string,number>>((o,t)=>({...o,[t.category]:(o[t.category]??0)+t.amount}),{})).sort((a,b)=>b[1]-a[1]).slice(0,4),max=cats[0]?.[1]??1; return <div className="content ledger"><div className="heading"><div><p className="eyebrow">{new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'long'}).format(new Date())}</p><h1>本月账本</h1><p className="subtle">看见每一笔钱，也看见生活的选择。</p></div><button className="soft-button accent" onClick={onAdd}><WalletCards size={18}/>记一笔</button></div><div className="stat-grid"><Stat label="本月结余" value={money(income-expense)} tone="purple"/><Stat label="收入" value={money(income)} tone="green"/><Stat label="支出" value={money(expense)} tone="orange"/></div>{cats.length>0&&<section className="spending"><div className="ledger-title"><h2>支出分布</h2><span>本月</span></div>{cats.map(([name,amount])=><div className="bar-row" key={name}><span>{name}</span><i><b style={{width:`${amount/max*100}%`}}/></i><strong>{money(amount)}</strong></div>)}</section>}<section className="ledger-list"><div className="ledger-title"><h2>最近流水</h2><span>{items.length} 笔</span></div>{items.length?items.map(item=><article className="transaction" key={item.id}><button className={item.kind==='income'?'txn-icon income':'txn-icon'} onClick={()=>onEdit(item)}>{item.kind==='income'?<ArrowDownLeft size={18}/>:<ArrowUpRight size={18}/>}</button><button className="transaction-main" onClick={()=>onEdit(item)}><b>{item.category}</b><p>{item.note||'未添加备注'} · {new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric'}).format(new Date(item.createdAt))}</p></button><strong className={item.kind}>{item.kind==='income'?'+':'-'}{money(item.amount)}</strong><button className="delete-transaction" onClick={()=>onDelete(item.id)}><Trash2 size={15}/></button></article>):<div className="ledger-empty">第一笔记录，会让这个月变得清晰。<button onClick={onAdd}>现在记一笔</button></div>}</section></div> }
+function Nav({icon,text,count,selected,onClick,subdued=false}:{icon:React.ReactNode;text:string;count?:number;selected:boolean;onClick:()=>void;subdued?:boolean}) { return <SoftButton className={`${selected?'nav-item active':'nav-item'}${subdued?' subdued':''}`} onClick={onClick}>{icon}<span>{text}</span>{count?<em>{count}</em>:null}</SoftButton> }
+function Ledger({items,income,expense,onAdd,onEdit,onDelete}:{items:Transaction[];income:number;expense:number;onAdd:()=>void;onEdit:(t:Transaction)=>void;onDelete:(id:string)=>void}) { const cats=Object.entries(items.filter(t=>t.kind==='expense').reduce<Record<string,number>>((o,t)=>({...o,[t.category]:(o[t.category]??0)+t.amount}),{})).sort((a,b)=>b[1]-a[1]).slice(0,4),max=cats[0]?.[1]??1; return <div className="content ledger"><div className="heading"><div><p className="eyebrow">{new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'long'}).format(new Date())}</p><h1>本月账本</h1><p className="subtle">看见每一笔钱，也看见生活的选择。</p></div><button className="soft-button accent" onClick={onAdd}><WalletCards size={18}/>记一笔</button></div><div className="stat-grid"><Stat label="本月结余" value={money(income-expense)} tone="purple"/><Stat label="收入" value={money(income)} tone="green"/><Stat label="支出" value={money(expense)} tone="orange"/></div>{cats.length>0&&<section className="spending"><div className="ledger-title"><h2>支出分布</h2><span>本月</span></div>{cats.map(([name,amount])=><div className="bar-row" key={name}><span>{name}</span><i><b style={{width:`${amount/max*100}%`}}/></i><strong>{money(amount)}</strong></div>)}</section>}<section className="ledger-list"><div className="ledger-title"><h2>本月流水</h2><span>{items.length} 笔</span></div>{items.length?items.map(item=><article className="transaction" key={item.id}><button className={item.kind==='income'?'txn-icon income':'txn-icon'} onClick={()=>onEdit(item)}>{item.kind==='income'?<ArrowDownLeft size={18}/>:<ArrowUpRight size={18}/>}</button><button className="transaction-main" onClick={()=>onEdit(item)}><b>{item.category}</b><p>{item.note||'未添加备注'} · {new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric'}).format(new Date(item.createdAt))}</p></button><strong className={item.kind}>{item.kind==='income'?'+':'-'}{money(item.amount)}</strong><button aria-label="删除账目" className="delete-transaction" onClick={()=>onDelete(item.id)}><Trash2 size={15}/></button></article>):<div className="ledger-empty">第一笔记录，会让这个月变得清晰。<button onClick={onAdd}>现在记一笔</button></div>}</section></div> }
 function Stat({label,value,tone}:{label:string;value:string;tone:string}) { return <article className={`stat ${tone}`}><span>{label}</span><b>{value}</b></article> }
-function LedgerComposer({item,onClose,onSave}:{item?:Transaction;onClose:()=>void;onSave:(draft:Omit<Transaction,'id'|'createdAt'>,id?:string)=>void}) { const [amount,setAmount]=useState(item?String(item.amount):''),[category,setCategory]=useState(item?.category??'餐饮'),[note,setNote]=useState(item?.note??''),[kind,setKind]=useState<Transaction['kind']>(item?.kind??'expense'); return <Modal onClose={onClose}><section className="composer ledger-composer"><header><span>{item?'编辑账目':'记一笔'}</span><button onClick={onClose}><X size={19}/></button></header><div className="kind-toggle"><button className={kind==='expense'?'selected':''} onClick={()=>setKind('expense')}>支出</button><button className={kind==='income'?'selected income-choice':''} onClick={()=>setKind('income')}>收入</button></div><label className="amount-input"><span>¥</span><input autoFocus inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9.]/g,''))} placeholder="0.00"/></label><div className="fields"><label>分类<select value={category} onChange={e=>setCategory(e.target.value)}>{['餐饮','交通','购物','生活','娱乐','学习','工资','奖金','其他'].map(v=><option key={v}>{v}</option>)}</select></label><label>备注<input value={note} onChange={e=>setNote(e.target.value)} placeholder="例如：午餐"/></label></div><footer><span></span><button className="save" disabled={!Number(amount)} onClick={()=>onSave({amount:Number(amount),category,note,kind},item?.id)}>保存账目</button></footer></section></Modal> }
-function SettingsView({theme,onTheme,onExport,onImport}:{theme:'light'|'dark';onTheme:()=>void;onExport:()=>void;onImport:()=>void}) { return <div className="content settings-view"><div className="heading"><div><p className="eyebrow">偏好与数据</p><h1>设置</h1><p className="subtle">你的数据只存放在这台设备上。</p></div></div><Setting title="外观" description="在浅色与深色之间切换" action={<button className="soft-button" onClick={onTheme}>{theme==='light'?<Moon size={16}/>:<Sun size={16}/>}{theme==='light'?'使用深色':'使用浅色'}</button>}/><Setting title="导出备份" description="下载包含所有记录和账目的 JSON 文件" action={<button className="soft-button" onClick={onExport}><Download size={16}/>导出</button>}/><Setting title="导入备份" description="导入会替换当前设备上的记录和账目" action={<button className="soft-button" onClick={onImport}><FileUp size={16}/>导入</button>}/></div> }
+function LedgerComposer({item,onClose,onSave}:{item?:Transaction;onClose:()=>void;onSave:(draft:Omit<Transaction,'id'|'createdAt'>,id?:string)=>void}) { const [amount,setAmount]=useState(item?String(item.amount):''),[category,setCategory]=useState(item?.category??'餐饮'),[note,setNote]=useState(item?.note??''),[kind,setKind]=useState<Transaction['kind']>(item?.kind??'expense'); return <Modal title={item?'编辑账目':'记一笔'} onClose={onClose}><section className="composer ledger-composer"><header><span>{item?'编辑账目':'记一笔'}</span><button aria-label="关闭" onClick={onClose}><X size={19}/></button></header><div className="kind-toggle"><button className={kind==='expense'?'selected':''} onClick={()=>setKind('expense')}>支出</button><button className={kind==='income'?'selected income-choice':''} onClick={()=>setKind('income')}>收入</button></div><label className="amount-input"><span>¥</span><input autoFocus inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9.]/g,''))} placeholder="0.00"/></label><div className="fields"><label>分类<select value={category} onChange={e=>setCategory(e.target.value)}>{['餐饮','交通','购物','生活','娱乐','学习','工资','奖金','其他'].map(v=><option key={v}>{v}</option>)}</select></label><label>备注<input value={note} onChange={e=>setNote(e.target.value)} placeholder="例如：午餐"/></label></div><footer><span></span><button className="save" disabled={!Number(amount)} onClick={()=>onSave({amount:Number(amount),category,note,kind},item?.id)}>保存账目</button></footer></section></Modal> }
+function SettingsView({theme,onTheme,onExport,onImport,ambientEnabled,reducedMotion,onAmbient,petShown,onPet,petName,onOpenWardrobe}:{ambientEnabled:boolean;reducedMotion:boolean;onAmbient:()=>void;petShown:boolean;onPet:()=>void;petName:string;onOpenWardrobe:()=>void;theme:'light'|'dark';onTheme:()=>void;onExport:()=>void;onImport:()=>void}) { return <div className="content settings-view"><div className="heading"><div><p className="eyebrow">偏好与数据</p><h1>设置</h1><p className="subtle">你的数据只存放在这台设备上。</p></div></div><Setting title="外观" description="在浅色与深色之间切换" action={<button className="soft-button" onClick={onTheme}>{theme==='light'?<Moon size={16}/>:<Sun size={16}/>}{theme==='light'?'使用深色':'使用浅色'}</button>}/><Setting title="动态效果" description={reducedMotion?'已随系统减少动态效果，静态关联仍可操作':'让主体光场、记录节点与关联流光缓缓呼吸'} action={<button aria-pressed={ambientEnabled} className="soft-button" onClick={onAmbient}><Sparkles size={16}/>{ambientEnabled?'关闭动态':'开启动效'}</button>}/><Setting title="宠物伙伴" description={`让${petName}陪你留一点晴朗，可随时收起或重新开启`} action={<div className="pet-setting-actions"><button aria-pressed={petShown} className="soft-button" onClick={onPet}><Sparkles size={16}/>{petShown?'收起伙伴':'显示伙伴'}</button><SoftButton className="soft-button" onClick={onOpenWardrobe}>挑选装扮</SoftButton></div>}/><Setting title="导出备份" description="下载包含所有记录、待办和账目的 JSON 文件" action={<button className="soft-button" onClick={onExport}><Download size={16}/>导出</button>}/><Setting title="导入备份" description="导入会替换当前设备上的记录、待办和账目" action={<button className="soft-button" onClick={onImport}><FileUp size={16}/>导入</button>}/></div> }
 function Setting({title,description,action}:{title:string;description:string;action:React.ReactNode}) { return <section className="settings-card"><div><b>{title}</b><p>{description}</p></div>{action}</section> }
 
 function AiPanel({ notes, transactions, onClose, onToast }: { notes: Note[]; transactions: Transaction[]; onClose: () => void; onToast: (message: string) => void }) {
@@ -104,5 +326,5 @@ function AiPanel({ notes, transactions, onClose, onToast }: { notes: Note[]; tra
   useEffect(() => { prepareAi().then(setConfigured).catch(() => setConfigured(false)) }, [])
   const context = () => JSON.stringify({ notes: notes.slice(0, 50).map(n => ({ content:n.content, date:n.scheduledDate, done:n.done })), transactions: transactions.slice(0, 80).map(t => ({ amount:t.amount, category:t.category, kind:t.kind, note:t.note, date:t.createdAt })) })
   async function ask(value = prompt) { if (!value.trim()) return; if (!isDesktop()) { setAnswer('AI 功能需要在原生桌面版中运行，这样 API 密钥才不会暴露在浏览器。请运行 npm run desktop。'); return } if (!configured) { onToast('未能从本机配置导入 DeepSeek 密钥'); return } setBusy(true); setAnswer(''); try { const reply = await askAi(value, context()); setAnswer(reply.content) } catch { setAnswer('这次请求没有完成。请检查网络和 DeepSeek 账户余额后重试。') } finally { setBusy(false) } }
-  return <div className="ai-drawer"><header><div><span className="ai-orb"><Sparkles size={16}/></span><div><b>晴笺 AI</b><p>{configured === null ? '正在准备…' : configured ? 'DeepSeek V4.1-Flash 已就绪' : '桌面端 AI 未配置'}</p></div></div><button onClick={onClose}><X size={19}/></button></header><div className="ai-content">{answer ? <div className="ai-answer">{answer}</div> : <div className="ai-intro"><span>✦</span><h2>想从哪里开始？</h2><p>我可以只基于你的本地记录，帮你整理与回顾。</p><button onClick={() => ask('请总结我今天的记录，并给出 3 条简短的行动建议。')}>总结今天</button><button onClick={() => ask('请从我的笔记中提取待办，并按今天、明天和以后分类。')}>整理待办</button><button onClick={() => ask('请分析本月账目，指出最主要的支出方向和一个可实行的小建议。')}>分析账本</button></div>}</div><footer><textarea value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') ask() }} placeholder="问问你的笔记与账本…"/><button disabled={busy || !prompt.trim()} onClick={() => ask()}>{busy ? '思考中…' : <ArrowDownToLine size={18}/>}</button></footer></div>
+  return <div className="ai-drawer"><header><div><span className="ai-orb"><Sparkles size={16}/></span><div><b>晴笺 AI</b><p>{configured === null ? '检测本机 AI 配置…' : configured ? 'DeepSeek V4.1-Flash 已就绪' : '桌面端 AI 未配置'}</p></div></div><button aria-label="关闭" onClick={onClose}><X size={19}/></button></header><div className="ai-content">{answer ? <div className="ai-answer">{answer}</div> : <div className="ai-intro"><span>✦</span><h2>想从哪里开始？</h2><p>我可以只基于你的本地记录，帮你整理与回顾。</p><button onClick={() => ask('请总结我近期的记录，并给出 3 条简短的行动建议。')}>总结记录</button><button onClick={() => ask('请从我的笔记中提取待办，并按日期与标签整理。')}>整理待办</button><button onClick={() => ask('请分析本月账目，指出最主要的支出方向和一个可实行的小建议。')}>分析账本</button></div>}</div><footer><textarea aria-label="向晴笺 AI 提问" value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="问问你的笔记与账本…"/><button aria-label="发送提问" disabled={busy || !prompt.trim()} onClick={() => ask()}>{busy ? '思考中…' : <ArrowDownToLine size={18}/>}</button></footer></div>
 }

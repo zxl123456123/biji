@@ -1,7 +1,7 @@
 {
   "name": "luma-notes",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,23 +11,37 @@
     "tauri": "tauri",
     "desktop": "tauri dev",
     "desktop:build": "tauri build",
-    "release:windows": "tauri build"
+    "release:windows": "tauri build",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
+    "@dnd-kit/dom": "0.5.0",
+    "@dnd-kit/react": "0.5.0",
     "@tauri-apps/api": "^2.10.1",
-    "vite": "latest",
-    "typescript": "latest",
+    "@vitejs/plugin-react": "latest",
+    "d3-drag": "3.0.0",
+    "d3-force": "3.0.0",
+    "d3-selection": "3.0.0",
+    "d3-zoom": "3.0.0",
+    "lucide-react": "latest",
+    "motion": "14.0.0",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
+    "three": "0.186.1",
+    "typescript": "latest",
+    "vite": "latest",
     "vite-plugin-pwa": "latest"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1",
+    "@types/d3-drag": "3.0.7",
+    "@types/d3-force": "3.0.10",
+    "@types/d3-selection": "3.0.12",
+    "@types/d3-zoom": "3.0.9",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "@vite-pwa/assets-generator": "latest",
-    "@tauri-apps/cli": "^2.10.1"
+    "@types/three": "0.186.0",
+    "@vite-pwa/assets-generator": "latest"
   }
 }
