@@ -29,3 +29,9 @@ test('explicit malformed todos cannot erase current tasks', () => {
     assert.throws(() => importBackupData({ version: 1, notes, transactions: [], todos }, currentTodos), /待办格式不正确/)
   }
 })
+
+test('JSON backup import retains an embedded pet directive as note plain text', () => {
+  const embedded = [{ ...notes[0], content: '开头\n[[pet:xiaotuan]]\n结尾' }]
+  const result = importBackupData({ version: 1, notes: embedded, transactions: [], todos: [] }, currentTodos)
+  assert.equal(result.data.notes[0].content, embedded[0].content)
+})

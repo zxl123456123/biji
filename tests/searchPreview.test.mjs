@@ -63,3 +63,11 @@ test('cached search data is reused but follows changed content and replacement r
   assert.deepEqual(selectNotes([record], filter('柔和')), [])
   assert.notEqual(noteSearchData({ ...record }), next)
 })
+
+test('embedded original pet indexes its visible name instead of the storage directive', () => {
+  const record = note('今日\n[[pet:xiaotuan]]\n晴天 #心情')
+  assert.equal(noteSearchData(record).text.includes('晴小团'), true)
+  assert.equal(noteSearchData(record).text.includes('pet:xiaotuan'), false)
+  assert.deepEqual(noteSearchData(record).tags, ['心情'])
+  assert.deepEqual(marks(searchPreview(noteSearchData(record).text, '晴小团')), ['晴小团'])
+})

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { escapeLiteral, headingLiteral, inlineHtml, inlineLiteral, inlinePlain, noteHtml, notePlain, parseInline, parseNote, splitProtectedCode, fenceLiteral, quoteLiteral } from '../src/noteCodec.ts'
+import { escapeLiteral, headingLiteral, inlineHtml, inlineLiteral, inlinePlain, noteHtml, notePlain, parseInline, parseNote, splitProtectedCode, fenceLiteral, quoteLiteral, PET_DIRECTIVE } from '../src/noteCodec.ts'
 import { contentWithTags, tagsFor, withoutTags } from '../src/recordTools.ts'
 import { plainNoteText } from '../src/noteText.ts'
 
@@ -65,6 +65,26 @@ test('ordinary input is escaped, unknown HTML remains literal and old kbd wrappe
 test('the graph legacy plain-text golden result remains unchanged', () => {
   const body = '# 标题\n## 小题\n- **正文** _斜体_ `内联` [[color:blue|颜色]] [[size:lg|大字]]\n```\n**literal** <script>\n```\n<kbd>快捷</kbd> [[unknown|keep]] #标签'
   assert.equal(plainNoteText(body), '标题\n小题\n正文 斜体 内联 颜色 大字\n\n**literal** <script>\n\n快捷 [[unknown|keep]]')
+})
+
+test('one exact standalone original pet is a safe block with visible search words', () => {
+  const content = contentWithTags(`开头\n${PET_DIRECTIVE}\n结尾`, ['旅行'])
+  const blocks = parseNote(withoutTags(content))
+  assert.deepEqual(blocks.map(block => block.kind), ['paragraph', 'pet', 'paragraph'])
+  assert.equal(notePlain(blocks), '开头\n晴小团\n结尾')
+  assert.match(noteHtml(blocks), /data-note-pet="xiaotuan" contenteditable="false"/)
+  assert.deepEqual(tagsFor(content), ['旅行'])
+})
+
+test('pet syntax stays literal in code, inline, escaped, unknown and duplicate lines', () => {
+  for (const source of [`前 ${PET_DIRECTIVE} 后`, `\\${PET_DIRECTIVE}`, '`' + PET_DIRECTIVE + '`', '[[pet:nailong]]']) {
+    assert.equal(parseNote(source).some(block => block.kind === 'pet'), false)
+  }
+  const fenced = parseNote('```\n' + PET_DIRECTIVE + '\n```')
+  assert.equal(fenced.some(block => block.kind === 'pet'), false)
+  const duplicate = parseNote(`${PET_DIRECTIVE}\n${PET_DIRECTIVE}`)
+  assert.deepEqual(duplicate.map(block => block.kind), ['pet', 'paragraph'])
+  assert.equal(notePlain(duplicate), `晴小团\n${PET_DIRECTIVE}`)
 })
 
 test('quote serialization omits empty markers through actual trimming, keeping internal blank lines', () => {

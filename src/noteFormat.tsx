@@ -1,6 +1,9 @@
 import type { Inline } from './noteCodec'
-import { colors, escapeLiteral, fenceLiteral, headingLiteral, inlineLiteral, noteHtml, parseNote, quoteLiteral, sizes } from './noteCodec'
+import { colors, escapeLiteral, fenceLiteral, headingLiteral, inlineLiteral, noteHtml, parseNote, PET_DIRECTIVE, quoteLiteral, sizes } from './noteCodec'
 import { tagsFor, withoutTags } from './recordTools'
+import { DEFAULT_PET_APPEARANCE } from './petAppearance'
+import type { PetAppearance } from './petAppearance'
+import { PetPortrait } from './PetCompanion'
 
 function renderInline(nodes: Inline[]): React.ReactNode[] {
   return nodes.map((node, key) => {
@@ -12,8 +15,9 @@ function renderInline(nodes: Inline[]): React.ReactNode[] {
     return <span key={key} className={`text-${node.kind} ${node.value}`}>{body}</span>
   })
 }
-export function renderMarkdown(value: string) {
+export function renderMarkdown(value: string, appearance: PetAppearance = DEFAULT_PET_APPEARANCE) {
   return parseNote(value).map((block, key) => {
+    if (block.kind === 'pet') return <span key={key} className="embedded-pet-preview" aria-label="晴小团"><PetPortrait appearance={{ ...appearance, character: 'xiaotuan' }} mood="idle" animate={false}/><span>晴小团</span></span>
     if (block.kind === 'blank') return null
     if (block.kind === 'code') return <pre key={key}><code>{block.value}</code></pre>
     if (block.kind === 'list') {
@@ -30,6 +34,8 @@ export const markdownToEditorHtml = (value: string) => noteHtml(parseNote(value)
 
 const escapeBlockStart = (body: string) => body.replace(/^(?=#{1,2} |(?:- |[1-9]\d*\. )|> )/gm, '\\')
 export function editorHtmlToMarkdown(root: HTMLElement): string {
+  let petSerialized = false
+  const isPet = (node: HTMLElement) => node.parentElement === root && node.tagName === 'DIV' && node.getAttribute('data-note-pet') === 'xiaotuan' && node.getAttribute('contenteditable') === 'false'
   const joinChildren = (nodes: Node[], visit: (node: Node) => string): string => {
     let result = ''
     for (const node of nodes) {
@@ -74,6 +80,10 @@ export function editorHtmlToMarkdown(root: HTMLElement): string {
   }
   const block = (node: Node): string => {
     if (!(node instanceof HTMLElement)) return inline(node)
+    if (isPet(node)) {
+      if (!petSerialized) { petSerialized = true; return `${PET_DIRECTIVE}\n` }
+      return `${escapeLiteral(PET_DIRECTIVE)}\n`
+    }
     const tag = node.tagName.toLowerCase()
     if (tag === 'pre') return `${fenceLiteral(node.textContent ?? '', node.querySelector('code')?.dataset.language ?? '')}\n`
     if (tag === 'ul' || tag === 'ol') return list(node)

@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bold, CalendarDays, Code, Italic, List, ListOrdered, Quote, X } from 'lucide-react'
+import { createRoot } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
+import { Bold, CalendarDays, Code, Italic, List, ListOrdered, Quote, Sparkles, X } from 'lucide-react'
 import { clearNoteDraft, loadNoteDraft, saveNoteDraft } from './store'
 import type { Note } from './types'
 import { Modal } from './Modal'
 import { markdownToEditorHtml, editorHtmlToMarkdown } from './noteFormat'
-import { escapeHtml } from './noteCodec'
+import { escapeHtml, PET_HOST_HTML } from './noteCodec'
+import { Pet3DView } from './Pet3DView'
+import { PetPortrait } from './PetCompanion'
+import type { PetAppearance } from './petAppearance'
 import { canUseTemplate, noteTemplates } from './noteTemplates'
 import type { NoteTemplate } from './noteTemplates'
 import { today, dateKey, dateLabel, tagsFor, withoutTags, normaliseTag, contentWithTags } from './recordTools'
@@ -24,7 +29,13 @@ function canInsertCode(editor: HTMLElement, range: Range) {
   return rangeOwned(editor, range) && !range.collapsed && !!range.toString().trim() && rangeBlock(range.startContainer, editor) === rangeBlock(range.endContainer, editor) && !rangeElement(range.startContainer)?.closest('code,pre') && !rangeElement(range.endContainer)?.closest('code,pre') && !range.cloneContents().querySelector('code,pre')
 }
 
-export function NoteComposer({note,availableTags,onClose,onSave}:{note?:Note;availableTags:string[];onClose:()=>void;onSave:(draft:Omit<Note,'id'|'createdAt'>,id?:string)=>void}) {
+function EmbeddedPetModel({ appearance, animate }: { appearance: PetAppearance; animate: boolean }) {
+  const original = { ...appearance, character: 'xiaotuan' as const }
+  return <span className="embedded-pet-model"><Pet3DView appearance={original} mood="idle" animate={animate}
+    modelUrl={`${import.meta.env.BASE_URL}pets/xiaotuan.glb`} original fallback={<PetPortrait appearance={original} mood="idle" animate={false}/>}/><span>晴小团</span></span>
+}
+
+export function NoteComposer({note,availableTags,appearance,animatePet,onClose,onSave}:{note?:Note;availableTags:string[];appearance:PetAppearance;animatePet:boolean;onClose:()=>void;onSave:(draft:Omit<Note,'id'|'createdAt'>,id?:string)=>void}) {
   const draftKey=note?.id??'new', draft=useMemo(()=>loadNoteDraft(draftKey),[draftKey])
   const initialSavedContent=draft?.content??note?.content??'', initialContent=withoutTags(initialSavedContent)
   const [content,setContent]=useState(initialContent), [date,setDate]=useState(draft?.scheduledDate??note?.scheduledDate??today())
@@ -33,6 +44,7 @@ export function NoteComposer({note,availableTags,onClose,onSave}:{note?:Note;ava
   const [toolbar,setToolbar]=useState(emptyToolbar)
   const ref=useRef<HTMLDivElement>(null), committed=useRef(false), composing=useRef(false)
   const savedRange=useRef<Range|null>(null), latestBody=useRef(initialContent)
+  const petRoot=useRef<{ host: HTMLElement; root: Root } | null>(null)
   const savedContent=contentWithTags(content,tags)
   const addTag=(value:string)=>{const tag=normaliseTag(value);if(tag)setTags(items=>items.includes(tag)?items:[...items,tag]);setTagInput('')}
   const captureSelection=()=>{
@@ -98,12 +110,45 @@ export function NoteComposer({note,availableTags,onClose,onSave}:{note?:Note;ava
     syncFromEditor()
     if(!accepted)setDraftStatus('此格式暂不可用，可以继续编辑正文')
   }
+  const insertPet=()=>{
+    if(committed.current||composing.current)return
+    const editor=ref.current, range=restoreRange()
+    if(!editor||!range)return
+    if(!range.collapsed || rangeElement(range.startContainer)?.closest('h2,h3,li,blockquote,pre,code,ul,ol,[data-note-pet]') || Array.from(editor.children).some(child=>child instanceof HTMLElement&&child.dataset.notePet==='xiaotuan')){
+      setDraftStatus('晴小团只能在普通正文光标处插入一次');return
+    }
+    const accepted=document.execCommand('insertHTML',false,PET_HOST_HTML)
+    if(!accepted){setDraftStatus('暂时无法插入晴小团，可以继续编辑正文');return}
+    syncFromEditor()
+    if(!Array.from(editor.children).some(child=>child instanceof HTMLElement&&child.dataset.notePet==='xiaotuan'))setDraftStatus('当前位置无法放入晴小团，请在普通正文段落中重试')
+  }
   useEffect(()=>{
     if(ref.current)ref.current.innerHTML=markdownToEditorHtml(initialContent)
+    const editor=ref.current
+    const reconcile=()=>{
+      reconcileTimer=undefined
+      if(!editor)return
+      const host=Array.from(editor.children).find(child=>child instanceof HTMLElement&&child.tagName==='DIV'&&child.dataset.notePet==='xiaotuan'&&child.contentEditable==='false') as HTMLElement|undefined
+      if(petRoot.current&&petRoot.current.host!==host){petRoot.current.root.unmount();petRoot.current=null}
+      if(host&&!petRoot.current){
+        const mount=host.querySelector<HTMLElement>('[data-note-pet-mount]')
+        if(mount){const root=createRoot(mount);petRoot.current={host,root};root.render(<EmbeddedPetModel appearance={appearance} animate={animatePet}/>)}
+      }
+    }
+    let reconcileTimer:number|undefined
+    const scheduleReconcile=()=>{if(reconcileTimer===undefined)reconcileTimer=window.setTimeout(reconcile,0)}
+    const observer=new MutationObserver(scheduleReconcile)
+    if(editor){observer.observe(editor,{childList:true,subtree:true});scheduleReconcile()}
     const timer=setTimeout(()=>{ref.current?.focus({preventScroll:true});captureSelection()},30)
     document.addEventListener('selectionchange',captureSelection)
-    return ()=>{clearTimeout(timer);document.removeEventListener('selectionchange',captureSelection)}
+    return ()=>{
+      clearTimeout(timer);document.removeEventListener('selectionchange',captureSelection);observer.disconnect()
+      if(reconcileTimer!==undefined)clearTimeout(reconcileTimer)
+      const mounted=petRoot.current;petRoot.current=null
+      if(mounted)window.setTimeout(()=>mounted.root.unmount(),0)
+    }
   },[])
+  useEffect(()=>{petRoot.current?.root.render(<EmbeddedPetModel appearance={appearance} animate={animatePet}/>)},[appearance,animatePet])
   useEffect(()=>{
     if(committed.current)return
     const unchanged=!!note&&savedContent===note.content&&date===(note.scheduledDate??today())
@@ -150,6 +195,7 @@ export function NoteComposer({note,availableTags,onClose,onSave}:{note?:Note;ava
           <button title="有序列表" aria-label="有序列表" aria-pressed={toolbar.ordered} onMouseDown={toolMouseDown} onClick={()=>runCommand('insertOrderedList')}><ListOrdered size={18}/></button>
           <button title="引用" aria-label="引用" aria-pressed={toolbar.block==='blockquote'} onMouseDown={toolMouseDown} onClick={()=>runCommand('formatBlock','blockquote')}><Quote size={17}/></button>
           <button title="选择同一段文字后使用" aria-label="行内代码：选择同一段文字后使用" disabled={!toolbar.code} onMouseDown={toolMouseDown} onClick={insertCode}><Code size={18}/></button>
+          <button title="在正文插入晴小团" aria-label="插入晴小团" onMouseDown={toolMouseDown} onClick={insertPet}><Sparkles size={18}/></button>
         </div>
       </div>
       {offerTemplates&&<div className="starter-templates" aria-label="起笔模板"><span>从空白开始，或用</span>{noteTemplates.map(template=><button key={template.name} onClick={()=>applyTemplate(template)}>{template.name}</button>)}</div>}

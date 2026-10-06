@@ -9,6 +9,7 @@ import { zoom, zoomIdentity } from 'd3-zoom'
 import type { ZoomTransform } from 'd3-zoom'
 import { Plus, Pause, Play, Maximize, Minus, LocateFixed } from 'lucide-react'
 import type { Note } from './types'
+import type { PetAppearance } from './petAppearance'
 import type { GraphModel } from './noteGraphModel'
 import type { GraphState } from './useNoteGraph'
 import { projectGraph } from './noteGraphModel'
@@ -31,7 +32,7 @@ type Subject = { node: SimNode; x: number; y: number }
 type Controls = { zoom: (factor: number) => void; fit: () => void; refresh: () => void; select: () => void; locate: (id: string) => LocateOutcome; retryLocate: () => void }
 type Props = {
   notes: Note[]; graph: GraphState & { retry: () => void }; session: MutableRefObject<GraphSession>
-  theme: 'light' | 'dark'; animate: boolean; visible: boolean; enabled: boolean
+  theme: 'light' | 'dark'; animate: boolean; visible: boolean; enabled: boolean; appearance: PetAppearance
   onMotion: () => void; onCreate: () => void; onEdit: (id: string) => void; onDelete: (id: string) => void
   filters: NoteFiltersProps
   locateRequest: LocateRequest | null; onLocateResult: (result: LocateResult) => void; onLocate: (id: string) => void
@@ -361,7 +362,7 @@ export default function NoteGraph(props: Props) {
     {graph.status === 'error' && <p role="status" className="graph-status">正文分析暂不可用，记录节点和标签筛选仍可使用。当前关联暂不可用。<button onClick={graph.retry}>重试</button></p>}
     <div className="graph-layout"><div className="graph-stage"><canvas ref={canvasRef} aria-label="记录关联画布，请使用旁边的文字选择查看和编辑记录"/>{!notes.length && <div className="graph-empty">没有匹配的记录<br/><button onClick={props.onCreate}>记下第一束微光</button></div>}</div>
       <aside className="graph-detail"><label>选择记录 · 全部匹配<select aria-label="选择图中记录" value={selectedId} onChange={event=>setSelectedId(event.target.value)}><option value="">选择一个记录节点</option>{notes.map(note=><option key={note.id} value={note.id}>{Array.from(plainNoteText(note.content) || '仅标签记录').slice(0,45).join('')}</option>)}</select></label>
-        {selected ? <><p className="group-label" style={{color:groupColor(selectedNode?.group ?? 'pending')}}>{groupLabel(selectedNode?.group ?? 'pending')}</p><div className="graph-note markdown-preview">{renderMarkdown(withoutTags(selected.content) || '仅标签记录')}</div><div className="graph-tags">{tagsFor(selected.content).map((tag,index)=><span key={`${tag}-${index}`}># {tag}</span>)}</div><div className="graph-detail-actions"><button className="soft-button accent" onClick={()=>props.onEdit(selected.id)}>编辑记录</button><button className="soft-button" onClick={()=>props.onLocate(selected.id)}><LocateFixed size={15}/>定位此记录</button><button className="soft-button" onClick={()=>props.onDelete(selected.id)}>移至回收站</button></div><h2>关联依据</h2>{relations.length ? <ul className="relation-list">{relations.map(edge=>{
+        {selected ? <><p className="group-label" style={{color:groupColor(selectedNode?.group ?? 'pending')}}>{groupLabel(selectedNode?.group ?? 'pending')}</p><div className="graph-note markdown-preview">{renderMarkdown(withoutTags(selected.content) || '仅标签记录', props.appearance)}</div><div className="graph-tags">{tagsFor(selected.content).map((tag,index)=><span key={`${tag}-${index}`}># {tag}</span>)}</div><div className="graph-detail-actions"><button className="soft-button accent" onClick={()=>props.onEdit(selected.id)}>编辑记录</button><button className="soft-button" onClick={()=>props.onLocate(selected.id)}><LocateFixed size={15}/>定位此记录</button><button className="soft-button" onClick={()=>props.onDelete(selected.id)}>移至回收站</button></div><h2>关联依据</h2>{relations.length ? <ul className="relation-list">{relations.map(edge=>{
           const other = edge.source === selectedId ? edge.target : edge.source
           const note = notes.find(item=>item.id===other)
           return <li key={other}><button onClick={()=>setSelectedId(other)}>{Array.from(plainNoteText(note?.content ?? '') || '仅标签记录').slice(0,30).join('')}</button>{edge.sharedTags.length>0 && <p>共同标签：{edge.sharedTags.join('、')}</p>}{edge.similarity!==undefined && <p>正文相近：{Math.round(edge.similarity*100)}%（词面推断）</p>}</li>

@@ -248,14 +248,14 @@ export default function App() {
     </div>
   } else if (view === 'garden') {
     viewContent = <Suspense fallback={<div className="content" role="status">正在打开记录时光…</div>}>
-      <RecordGarden notes={activeNotes} renderNote={note => renderMarkdown(withoutTags(note.content) || '仅标签记录')}
+      <RecordGarden notes={activeNotes} renderNote={note => renderMarkdown(withoutTags(note.content) || '仅标签记录', petAppearance)}
         onOpenNote={editLatestNote} onCreate={createInView} animate={motionAllowed && pageVisible && businessEnabled}
         companionName={PET_CHARACTER_NAMES[petAppearance.character]}
         renderCompanionFigure={localAnimate => <PetPortrait appearance={petAppearance} mood="idle" animate={localAnimate}/>}/>
     </Suspense>
   } else if (view === 'graph') {
     viewContent = <Suspense fallback={<div className="content" role="status">正在打开关联图…</div>}>
-      <NoteGraph notes={visibleNotes} graph={graph} session={graphSession} theme={theme}
+      <NoteGraph notes={visibleNotes} graph={graph} session={graphSession} theme={theme} appearance={petAppearance}
         animate={motionAllowed} visible={pageVisible} enabled={ambientEnabled}
         onMotion={() => setAmbientEnabled(value => !value)} onCreate={() => setComposer({ type: 'note' })}
         onEdit={editLatestNote} onDelete={trashNote}
@@ -263,7 +263,7 @@ export default function App() {
         filters={{ query, selectedTag, unfinished, tags, onTag: selectTag, onPickTags: () => setTagPickerOpen(true), count: visibleNotes.length, onUnfinished: setUnfinished, onClear: clearFilters }}/>
     </Suspense>
   } else {
-    viewContent = <NotesView layout={recordLayout} onLayout={setRecordLayout} view={view}
+    viewContent = <NotesView layout={recordLayout} onLayout={setRecordLayout} view={view} appearance={petAppearance}
       dataVersion={notes} businessEnabled={sortingEnabled} motionAllowed={motionAllowed}
       onReorder={reorderNotes} onPin={id => setNotes(current => toggleNotePin(current, id))}
       notes={visibleNotes} tags={tags} pinnedTags={pinnedTags} query={query} selectedTag={selectedTag}
@@ -304,7 +304,7 @@ export default function App() {
     {wheelEntryId && <Modal title="记录年轮" className="celestial-wheel-frame" onClose={closeWheel}><Suspense fallback={<p role="status">正在打开记录年轮…</p>}><CelestialNoteWheel entryId={wheelEntryId} notes={activeNotes} graph={graph} theme={theme}
       motionAllowed={motionAllowed} visible={pageVisible} businessEnabled={!composer && !quickOpen && !tagPickerOpen && !aiOpen && !todoReminder}
       onClose={closeWheel} onOpenNote={openWheelRecord}/></Suspense></Modal>}
-    {composer?.type==='note'&&<NoteComposer note={composer.note} availableTags={tags} onClose={()=>setComposer(null)} onSave={saveNote}/>}
+    {composer?.type==='note'&&<NoteComposer note={composer.note} availableTags={tags} appearance={petAppearance} animatePet={ambientEnabled && !reducedMotion && pageVisible} onClose={()=>setComposer(null)} onSave={saveNote}/>}
     {composer?.type==='transaction'&&<LedgerComposer item={composer.item} onClose={()=>setComposer(null)} onSave={saveTransaction}/>}
     {aiOpen&&<AiPanel notes={activeNotes} transactions={transactions} onClose={()=>setAiOpen(false)} onToast={show}/>}
     {quickOpen&&<QuickOpen notes={activeNotes} onClose={() => setQuickOpen(false)} onOpen={openRecord}/>}

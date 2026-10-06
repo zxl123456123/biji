@@ -6,6 +6,7 @@ export type Inline =
   | { kind: 'color'; value: string; children: Inline[] }
   | { kind: 'size'; value: string; children: Inline[] }
 export type NoteBlock =
+  | { kind: 'pet'; id: 'xiaotuan' }
   | { kind: 'paragraph' | 'heading'; children: Inline[]; level?: 2 | 3 }
   | { kind: 'blank' }
   | { kind: 'list'; ordered: boolean; start: number; items: Inline[][] }
@@ -14,6 +15,8 @@ export type NoteBlock =
 
 export const colors = ['red', 'orange', 'green', 'blue', 'purple']
 export const sizes = ['sm', 'lg', 'xl']
+export const PET_DIRECTIVE = '[[pet:xiaotuan]]'
+export const PET_HOST_HTML = '<div data-note-pet="xiaotuan" contenteditable="false" class="embedded-pet-editor" aria-label="晴小团"><span data-note-pet-mount="true">晴小团</span></div>'
 export const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 export const escapeLiteral = (value: string) => value.replace(/[\\*_`\[]/g, '\\$&')
 const escaped = (text: string, at: number) => {
@@ -193,6 +196,7 @@ export function inlineHtml(nodes: Inline[]): string {
 export function parseNote(value: string): NoteBlock[] {
   if (!value) return []
   const lines = value.split('\n'), blocks: NoteBlock[] = []
+  let petSeen = false
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i], opening = fenceOpening(line)
     if (opening) {
@@ -204,6 +208,7 @@ export function parseNote(value: string): NoteBlock[] {
       }
       blocks.push({ kind: 'code', value: body.join('\n'), language: opening[2].trim(), closed }); continue
     }
+    if (line === PET_DIRECTIVE && !petSeen) { blocks.push({ kind: 'pet', id: 'xiaotuan' }); petSeen = true; continue }
     const list = line.match(/^(- |([1-9]\d*)\. )(.*)$/)
     if (list) {
       const ordered = !!list[2], items: Inline[][] = [], start = Number(list[2] ?? 1)
@@ -231,6 +236,7 @@ export function parseNote(value: string): NoteBlock[] {
 }
 export function noteHtml(blocks: NoteBlock[]): string {
   return blocks.map(block => {
+    if (block.kind === 'pet') return PET_HOST_HTML
     if (block.kind === 'blank') return '<div><br></div>'
     if (block.kind === 'code') return `<pre><code${block.language ? ` data-language="${escapeHtml(block.language)}"` : ''}>${escapeHtml(block.value)}</code></pre>`
     if (block.kind === 'list') {
@@ -244,6 +250,7 @@ export function noteHtml(blocks: NoteBlock[]): string {
 }
 export function notePlain(blocks: NoteBlock[]): string {
   return blocks.map(block => {
+    if (block.kind === 'pet') return '晴小团'
     if (block.kind === 'blank') return ''
     if (block.kind === 'code') return `\n${block.value}${block.closed ? '\n' : ''}`
     if (block.kind === 'list') return block.items.map(inlinePlain).join('\n')
