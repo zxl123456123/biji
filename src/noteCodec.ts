@@ -16,7 +16,7 @@ export type NoteBlock =
 export const colors = ['red', 'orange', 'green', 'blue', 'purple']
 export const sizes = ['sm', 'lg', 'xl']
 export const PET_DIRECTIVE = '[[pet:xiaotuan]]'
-export const PET_HOST_HTML = '<div data-note-pet="xiaotuan" contenteditable="false" class="embedded-pet-editor" aria-label="晴小团"><span data-note-pet-mount="true">晴小团</span></div>'
+export const PET_HOST_HTML = '<div data-note-pet="xiaotuan" contenteditable="false" class="legacy-pet-text">晴小团</div>'
 export const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 export const escapeLiteral = (value: string) => value.replace(/[\\*_`\[]/g, '\\$&')
 const escaped = (text: string, at: number) => {

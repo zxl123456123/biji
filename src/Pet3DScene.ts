@@ -3,12 +3,17 @@ import type { PetAppearance } from './petAppearance'
 import type { PetMood } from './petBehavior'
 
 export type Pet3DScene = {
+  decorations: readonly PetDecoration[]
   setAppearance(appearance: PetAppearance): void
-  setMood(mood: PetMood): void
+  setMood(mood: PetMood, activity?: PetActivity): void
   setAnimate(animate: boolean): void
   resize(width: number, height: number): void
   dispose(): void
 }
+
+export type PetActivity = 'walk' | 'look'
+export type PetDecoration = 'Beret' | 'Halo' | 'Scarf' | 'Bow'
+const decorationNames: PetDecoration[] = ['Beret', 'Halo', 'Scarf', 'Bow']
 
 const palette = {
   cloud: { body: '#e9e1ff', ears: '#c6b3fc', leaves: '#9ee2cf', cloth: '#d2c0fa' },
@@ -35,12 +40,14 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
   let root: Object3D | null = null
   let disposed = false
   let animated = false
+  let animationRequested = false
   let mood: PetMood = 'idle'
   let frame = 0
   let lastTime = 0
   let action: AnimationAction | null = null
   let mixer: InstanceType<typeof THREE.AnimationMixer> | null = null
   let viewExtent = 1.55
+  let decorations: PetDecoration[] = []
   const gltf = await new GLTFLoader().loadAsync(modelUrl).catch(error => {
     renderer.dispose()
     throw error
@@ -65,15 +72,18 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
   const render = () => { if (!disposed) renderer.render(scene, camera) }
   const tick = (time: number) => {
     if (!animated || disposed) return
-    mixer?.update(Math.min((time - lastTime) / 1000, 0.05))
-    lastTime = time
-    render()
+    if (time - lastTime >= 1000 / 30) {
+      mixer?.update(Math.min((time - lastTime) / 1000, 0.1))
+      lastTime = time
+      render()
+    }
     frame = requestAnimationFrame(tick)
   }
   const setAnimate = (next: boolean) => {
-    animated = next
+    animationRequested = next
+    animated = next && mood !== 'resting'
     cancelAnimationFrame(frame)
-    if (next && !disposed) {
+    if (animated && !disposed) {
       lastTime = performance.now()
       frame = requestAnimationFrame(tick)
     } else {
@@ -81,25 +91,26 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
       render()
     }
   }
-  const setMood = (next: PetMood) => {
+  const setMood = (next: PetMood, activity?: PetActivity) => {
     mood = next
-    const clip = gltf.animations.find(item => item.name === (mood === 'happy' ? 'happy' : 'idle'))!
+    const preferred = mood === 'resting' ? 'rest' : mood === 'happy' ? 'happy' : activity ?? 'idle'
+    const clip = gltf.animations.find(item => item.name === preferred) ?? gltf.animations.find(item => item.name === 'idle')!
     const nextAction = mixer!.clipAction(clip)
     if (action !== nextAction) {
       action?.stop()
       nextAction.reset().play()
       action = nextAction
     }
-    if (!animated) mixer!.setTime(0)
-    if (!animated) render()
+    setAnimate(animationRequested)
   }
   const setAppearance = (appearance: PetAppearance) => {
-    if (!original) return
     const colors = palette[appearance.palette]
-    paint('Body', colors.body)
-    for (const name of ['EarLeft', 'EarRight']) paint(name, colors.ears)
-    for (const name of ['LeafLeft', 'LeafRight']) paint(name, colors.leaves)
-    for (const name of ['Beret', 'Halo', 'Scarf', 'Bow']) paint(name, colors.cloth)
+    if (original) {
+      paint('Body', colors.body)
+      for (const name of ['EarLeft', 'EarRight']) paint(name, colors.ears)
+      for (const name of ['LeafLeft', 'LeafRight']) paint(name, colors.leaves)
+    }
+    for (const name of decorations) paint(name, colors.cloth)
     show('Beret', appearance.head === 'beret')
     show('Halo', appearance.head === 'halo')
     show('Scarf', appearance.accessory === 'scarf')
@@ -124,7 +135,7 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
     cancelAnimationFrame(frame)
     mixer?.stopAllAction()
     if (root) mixer?.uncacheRoot(root)
-    root?.traverse(object => {
+    ;(root ?? gltf.scene).traverse(object => {
       const mesh = object as Mesh
       if (!mesh.isMesh) return
       mesh.geometry.dispose()
@@ -136,16 +147,23 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
     renderer.dispose()
   }
   try {
-    root = gltf.scene.children.find(child => child.name === 'PetRoot') ?? gltf.scene.children[0] ?? null
+    root = gltf.scene.getObjectByName('PetRoot') ?? null
     if (!root) throw new Error('模型缺少角色根节点')
     if (!['idle', 'happy'].every(name => gltf.animations.some(clip => clip.name === name))) throw new Error('模型缺少 idle/happy 动作')
     if (original && !['Body', 'EarLeft', 'EarRight', 'LeafLeft', 'LeafRight', 'Beret', 'Halo', 'Scarf', 'Bow'].every(name => root?.getObjectByName(name))) throw new Error('晴小团模型缺少装扮节点')
-    if (original) root.traverse(object => {
+    decorations = decorationNames.filter(name => root?.getObjectByName(name))
+    const sourceMaterials = new Set<Material>()
+    root.traverse(object => {
       const mesh = object as Mesh
-      if (mesh.isMesh) mesh.material = Array.isArray(mesh.material) ? mesh.material.map(material => material.clone()) : mesh.material.clone()
+      if (mesh.isMesh) {
+        const sources = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        sources.forEach(material => sourceMaterials.add(material))
+        mesh.material = Array.isArray(mesh.material) ? sources.map(material => material.clone()) : sources[0].clone()
+      }
     })
+    sourceMaterials.forEach(material => material.dispose())
     scene.add(root)
-    if (original) for (const name of ['Beret', 'Halo', 'Scarf', 'Bow']) root.getObjectByName(name)?.scale.setScalar(1)
+    for (const name of decorations) root.getObjectByName(name)?.scale.setScalar(1)
     const box = new THREE.Box3().setFromObject(root)
     if (box.isEmpty()) throw new Error('模型没有可显示的网格')
     const center = box.getCenter(new THREE.Vector3())
@@ -157,7 +175,7 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
     camera.updateProjectionMatrix()
     mixer = new THREE.AnimationMixer(root)
     setMood('idle')
-    return { setAppearance, setMood, setAnimate, resize, dispose }
+    return { decorations, setAppearance, setMood, setAnimate, resize, dispose }
   } catch (error) {
     dispose()
     throw error

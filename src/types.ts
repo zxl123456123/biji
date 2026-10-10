@@ -1,5 +1,13 @@
 export type NoteStatus = 'today' | 'tomorrow' | 'later' | 'none'
 
+export type NoteAttachment = {
+  id: string
+  name: string
+  mime: string
+  size: number
+  data: string
+}
+
 export type Note = {
   id: string
   content: string
@@ -10,9 +18,10 @@ export type Note = {
   done: boolean
   deletedAt?: string
   pinned?: boolean
+  attachments?: NoteAttachment[]
 }
 
-export type NoteDraft = Pick<Note, 'content' | 'status' | 'scheduledDate'> & {
+export type NoteDraft = Pick<Note, 'content' | 'status' | 'scheduledDate' | 'attachments'> & {
   savedAt: string
 }
 

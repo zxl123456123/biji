@@ -73,6 +73,8 @@ test('one exact standalone original pet is a safe block with visible search word
   assert.deepEqual(blocks.map(block => block.kind), ['paragraph', 'pet', 'paragraph'])
   assert.equal(notePlain(blocks), '开头\n晴小团\n结尾')
   assert.match(noteHtml(blocks), /data-note-pet="xiaotuan" contenteditable="false"/)
+  assert.match(noteHtml(blocks), /class="legacy-pet-text">晴小团<\/div>/)
+  assert.doesNotMatch(noteHtml(blocks), /canvas|svg|data-note-pet-mount|embedded-pet/)
   assert.deepEqual(tagsFor(content), ['旅行'])
 })
 

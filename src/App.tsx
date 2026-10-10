@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, CalendarDays, CheckSquare, Download, FileUp, LayoutList, Network, Minus, Moon, PinOff, Plus, Search, Settings, Sparkles, Square, Sun, Trash2, WalletCards, X } from 'lucide-react'
+import { ArrowDownToLine, CalendarDays, CheckSquare, Download, FileUp, LayoutList, Network, ChevronDown, Minus, Moon, PinOff, Plus, Search, Settings, Sparkles, Square, Sun, Trash2, WalletCards, X } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { askAi, isDesktop, loadDesktopData, prepareAi, saveDesktopData } from './desktop'
-import { exportData, importBackupData, loadNotes, loadTodos, loadTransactions, saveNotes, saveTodos, saveTransactions } from './store'
+import { askAi, isDesktop, prepareAi, saveDesktopData } from './desktop'
+import { useMainPetBridge } from './useMainPetBridge'
+import { exportData, importBackupData, loadNotes, loadStoredNotes, loadTodos, loadTransactions, saveStoredNotes, saveTodos, saveTransactions } from './store'
 import type { Note, Todo, Transaction } from './types'
 import { TodoView } from './TodoView'
 
@@ -38,7 +39,24 @@ export default function App() {
   const [notes, setNotes] = useState<Note[]>(loadNotes), [transactions, setTransactions] = useState<Transaction[]>(loadTransactions), [todos, setTodos] = useState<Todo[]>(loadTodos)
   const [view, setView] = useState<View>('all'), [query, setQuery] = useState(''), [composer, setComposer] = useState<Composer>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('luma-theme') === 'dark' ? 'dark' : 'light')
-  const [toast, setToast] = useState<Toast | null>(null), [ready, setReady] = useState(!isDesktop()), [aiOpen, setAiOpen] = useState(false)
+  const [toast, setToast] = useState<Toast | null>(null), [ready, setReady] = useState(false), [aiOpen, setAiOpen] = useState(false)
+  const persistence=useRef<Promise<void>>(Promise.resolve())
+  const desktopStorage=useRef(false)
+  const noteOperation=useRef(false)
+  const persist=(nextNotes:Note[],nextTransactions:Transaction[],nextTodos:Todo[])=>{
+    const data=exportData(nextNotes,nextTransactions,nextTodos)
+    persistence.current=persistence.current.catch(()=>{}).then(async()=>{
+      if(isDesktop()&&desktopStorage.current) await saveDesktopData(data)
+      else { await saveStoredNotes(nextNotes);saveTransactions(nextTransactions);saveTodos(nextTodos) }
+    })
+    return persistence.current
+  }
+  useEffect(()=>{
+    if(isDesktop())return
+    let active=true
+    loadStoredNotes().then(value=>{if(active){setNotes(value);setReady(true)}}).catch(()=>{if(active)setToast({message:'本机记录读取失败，请重启后重试'})})
+    return()=>{active=false}
+  },[])
   const [pinnedTags, setPinnedTags] = useState<string[]>(() => JSON.parse(localStorage.getItem('luma-pinned-tags') ?? '[]'))
   const [selectedTag, setSelectedTag] = useState<string | null>(null), [unfinished, setUnfinished] = useState(false)
   const [ambientEnabled, setAmbientEnabled] = useState(() => localStorage.getItem('luma-ambient-motion') !== 'off')
@@ -88,13 +106,41 @@ export default function App() {
     document.addEventListener('visibilitychange', update)
     return () => document.removeEventListener('visibilitychange', update)
   }, [])
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef<HTMLDivElement>(null), moreButtonRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (composer || quickOpen || tagPickerOpen || aiOpen || wheelEntryId) setMoreOpen(false)
+  }, [composer, quickOpen, tagPickerOpen, aiOpen, wheelEntryId])
+  useEffect(() => {
+    if (!moreOpen) return
+    const outside = (event: PointerEvent) => { if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false) }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setMoreOpen(false); moreButtonRef.current?.focus({ preventScroll: true }) }
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape) }
+  }, [moreOpen])
   const searchRef = useRef<HTMLInputElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
-  useEffect(() => { if (!isDesktop()) return; loadDesktopData().then(data => { setNotes(data.notes); setTransactions(data.transactions); setTodos(data.todos); setReady(true) }).catch(() => { setReady(true); setToast({message:'本地数据库暂不可用，已使用浏览器存储'}) }) }, [])
-  useEffect(() => { if (!ready) return; saveNotes(notes); saveTransactions(transactions); saveTodos(todos); if (isDesktop()) saveDesktopData(exportData(notes, transactions, todos)).catch(() => setToast({message:'本地数据库保存失败'})) }, [notes, transactions, todos, ready])
+  const dueTodos = todos.filter(item => !item.done && item.dueDate <= localDay)
+  useMainPetBridge({
+    summary: { appearance: petAppearance, theme, shown: petShown, motionEnabled: ambientEnabled,
+      localDay, dueCount: dueTodos.length, dueTitles: dueTodos.slice(0, 5).map(item => [...item.title].slice(0, 160).join('')) },
+    blocked: !!composer || quickOpen || tagPickerOpen || aiOpen || !!wheelEntryId,
+    commitData: data => { desktopStorage.current=true;setNotes(data.notes); setTransactions(data.transactions); setTodos(data.todos) },
+    businessReady: sqliteOK => {
+      if(sqliteOK)setReady(true)
+      else loadStoredNotes().then(value=>{setNotes(value);setReady(true)}).catch(()=>setToast({message:'本机记录读取失败，请重启后重试'}))
+    }, quickNote: () => setComposer({ type: 'note' }), openTodos: () => nav('todos'),
+    hide: () => { try { localStorage.setItem(PET_VISIBLE_KEY, 'off'); setPetShown(false); return true } catch { return false } },
+    show: () => { try { localStorage.setItem(PET_VISIBLE_KEY, 'on'); setPetShown(true); return true } catch { return false } },
+    report: message => setToast({ message }),
+  })
+  useEffect(() => { if (!ready) return; persist(notes,transactions,todos).catch(() => setToast({message:'本地数据保存失败，请导出备份并重试'})) }, [notes, transactions, todos, ready])
   useEffect(() => { const timer = setInterval(() => setLocalDay(today()), 60_000); return () => clearInterval(timer) }, [])
-  useEffect(() => { if (!ready || !petShown || !pageVisible || composer || quickOpen || tagPickerOpen || aiOpen || wheelEntryId || !todos.some(item => !item.done && item.dueDate <= localDay)) return; const key = `luma-todo-reminded:${localDay}`; if (!localStorage.getItem(key)) setTodoReminder(true) }, [ready, petShown, pageVisible, composer, quickOpen, tagPickerOpen, aiOpen, wheelEntryId, todos, localDay])
-  useEffect(() => { if (todoReminder && todos.some(item => !item.done && item.dueDate <= localDay)) localStorage.setItem(`luma-todo-reminded:${localDay}`, '1') }, [todoReminder, todos, localDay])
+  useEffect(() => { if (isDesktop() || !ready || !petShown || !pageVisible || composer || quickOpen || tagPickerOpen || aiOpen || wheelEntryId || !todos.some(item => !item.done && item.dueDate <= localDay)) return; const key = `luma-todo-reminded:${localDay}`; if (!localStorage.getItem(key)) setTodoReminder(true) }, [ready, petShown, pageVisible, composer, quickOpen, tagPickerOpen, aiOpen, wheelEntryId, todos, localDay])
+  useEffect(() => { if (!isDesktop() && todoReminder && todos.some(item => !item.done && item.dueDate <= localDay)) localStorage.setItem(`luma-todo-reminded:${localDay}`, '1') }, [todoReminder, todos, localDay])
   useLayoutEffect(() => { if (!todoReminder) return; const panel = reminderPanel.current; reminderReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; reminderClose.current?.focus(); return () => { if (panel?.contains(document.activeElement) && reminderReturnFocus.current?.isConnected) reminderReturnFocus.current.focus(); reminderReturnFocus.current = null } }, [todoReminder])
   useEffect(() => { if (composer || quickOpen || tagPickerOpen || aiOpen) setTodoReminder(false) }, [composer, quickOpen, tagPickerOpen, aiOpen])
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('luma-theme', theme) }, [theme])
@@ -112,6 +158,7 @@ export default function App() {
     const keys = (event: KeyboardEvent) => {
       if (ignoreNavigationKey(event)) return
       if (event.key === 'Escape') {
+        if (composer?.type==='note'&&noteOperation.current)return
         if (composer) setComposer(null)
         else if (quickOpen) setQuickOpen(false)
         else if (aiOpen) setAiOpen(false)
@@ -131,16 +178,16 @@ export default function App() {
   const visibleNotes = useMemo(() => selectNotes(notes, { query, tag: selectedTag, unfinished, trash: view === 'trash' }), [notes, view, query, selectedTag, unfinished])
   const graph = useNoteGraph(activeNotes, view === 'graph' || !!wheelEntryId)
   const motionAllowed = ambientEnabled && !reducedMotion && pageVisible && !composer && !quickOpen && !tagPickerOpen && !aiOpen
-  const sortingEnabled = pageVisible && !composer && !quickOpen && !tagPickerOpen && !aiOpen && !wheelEntryId
+  const sortingEnabled = ready && pageVisible && !composer && !quickOpen && !tagPickerOpen && !aiOpen && !wheelEntryId
   const businessEnabled = sortingEnabled
   const tags = useMemo(() => collectTags(activeNotes), [activeNotes])
   const [ledgerMonth, setLedgerMonth] = useState(() => today().slice(0, 7))
   const [ledgerRevealMonth, setLedgerRevealMonth] = useState(0)
   const show = (message: string, action?: Toast['action']) => setToast({ message, action })
   const clearFilters = () => { setQuery(''); setSelectedTag(null); setUnfinished(false) }
-  const nav = (next: View) => { editHandoff.current?.cancel(); setWheelEntryId(null); setQuickOpen(false); setTagPickerOpen(false); if (next !== 'graph') setLocateRequest(null); if (next === 'trash') clearFilters(); setView(next) }
+  const nav = (next: View) => { setMoreOpen(false); editHandoff.current?.cancel(); setWheelEntryId(null); setQuickOpen(false); setTagPickerOpen(false); if (next !== 'graph') setLocateRequest(null); if (next === 'trash') clearFilters(); setView(next) }
   const selectTag = (tag: string) => { setSelectedTag(tag || null); nav(view === 'graph' ? view : 'all') }
-  const createInView = () => { editHandoff.current?.cancel(); if (view === 'todos') { document.querySelector<HTMLInputElement>('[aria-label="新待办"]')?.focus(); return } setComposer({ type: view === 'ledger' ? 'transaction' : 'note' }) }
+  const createInView = () => { if(!ready)return; editHandoff.current?.cancel(); if (view === 'todos') { document.querySelector<HTMLInputElement>('[aria-label="新待办"]')?.focus(); return } setComposer({ type: view === 'ledger' ? 'transaction' : 'note' }) }
   useEffect(() => { if (composer) editHandoff.current?.cancel() }, [composer])
   useEffect(() => {
     if (locateRequest && !currentRecord(notes, locateRequest.id)) {
@@ -205,7 +252,13 @@ export default function App() {
       return reorderInCurrentView(current, filtered, recordLayout, expectedIds, orderedIds)
     })
   }
-  function saveNote(draft: Omit<Note, 'id' | 'createdAt'>, id?: string) { const now = new Date().toISOString(); id ? setNotes(v => v.map(n => n.id === id ? { ...n, ...draft, updatedAt: now } : n)) : setNotes(v => [{ ...draft, id: crypto.randomUUID(), createdAt: now, updatedAt: now }, ...v]); setComposer(null); show(id ? '记录已更新' : '已保存到你的记录') }
+  async function saveNote(draft: Omit<Note, 'id' | 'createdAt'>, id?: string) {
+    if(!ready)throw new Error('本机数据尚未读取')
+    const now=new Date().toISOString()
+    const next=id?notesRef.current.map(n=>n.id===id?{...n,...draft,updatedAt:now}:n):[{...draft,id:crypto.randomUUID(),createdAt:now,updatedAt:now},...notesRef.current]
+    await persist(next,transactions,todos)
+    setNotes(next);show(id?'记录已更新':'已保存到你的记录')
+  }
   function saveTransaction(draft: TransactionDraft, id?: string) {
     const now = new Date().toISOString()
     id ? setTransactions(items => items.map(item => item.id === id ? { ...item, ...draft, updatedAt: now } : item))
@@ -256,14 +309,14 @@ export default function App() {
     </div>
   } else if (view === 'garden') {
     viewContent = <Suspense fallback={<div className="content" role="status">正在打开记录时光…</div>}>
-      <RecordGarden notes={activeNotes} renderNote={note => renderMarkdown(withoutTags(note.content) || '仅标签记录', petAppearance)}
+      <RecordGarden notes={activeNotes} renderNote={note => renderMarkdown(withoutTags(note.content) || '仅标签记录')}
         onOpenNote={editLatestNote} onCreate={createInView} animate={motionAllowed && pageVisible && businessEnabled}
         companionName={PET_CHARACTER_NAMES[petAppearance.character]}
         renderCompanionFigure={localAnimate => <PetPortrait appearance={petAppearance} mood="idle" animate={localAnimate}/>}/>
     </Suspense>
   } else if (view === 'graph') {
     viewContent = <Suspense fallback={<div className="content" role="status">正在打开关联图…</div>}>
-      <NoteGraph notes={visibleNotes} graph={graph} session={graphSession} theme={theme} appearance={petAppearance}
+      <NoteGraph notes={visibleNotes} graph={graph} session={graphSession} theme={theme}
         animate={motionAllowed} visible={pageVisible} enabled={ambientEnabled}
         onMotion={() => setAmbientEnabled(value => !value)} onCreate={() => setComposer({ type: 'note' })}
         onEdit={editLatestNote} onDelete={trashNote}
@@ -271,7 +324,7 @@ export default function App() {
         filters={{ query, selectedTag, unfinished, tags, onTag: selectTag, onPickTags: () => setTagPickerOpen(true), count: visibleNotes.length, onUnfinished: setUnfinished, onClear: clearFilters }}/>
     </Suspense>
   } else {
-    viewContent = <NotesView layout={recordLayout} onLayout={setRecordLayout} view={view} appearance={petAppearance}
+    viewContent = <NotesView layout={recordLayout} onLayout={setRecordLayout} view={view}
       dataVersion={notes} businessEnabled={sortingEnabled} motionAllowed={motionAllowed}
       onReorder={reorderNotes} onPin={id => setNotes(current => toggleNotePin(current, id))}
       notes={visibleNotes} tags={tags} pinnedTags={pinnedTags} query={query} selectedTag={selectedTag}
@@ -282,37 +335,48 @@ export default function App() {
       onEdit={note => editLatestNote(note.id)} onOpenWheel={openWheel} onDelete={trashNote} onRestore={restoreNote}
       onDeleteForever={deleteForever} onTag={selectTag} onPinTag={togglePinTag}/>
   }
-  return <SoftInteraction allowed={motionAllowed}><main className={`app-shell${motionAllowed ? '' : ' motion-disabled'}`}>
+  const secondaryView = ({garden:'记录时光',graph:'关联图',pet:'伙伴',trash:'回收站',settings:'设置'} as Partial<Record<View,string>>)[view]
+  return <SoftInteraction allowed={motionAllowed}><main inert={!ready} className={`app-shell${motionAllowed ? '' : ' motion-disabled'}`}>
     <div className="workbench-light" aria-hidden="true"><i/><i/><i/></div>
-    {isDesktop() && <div className="desktop-titlebar" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}><div className="desktop-drag" data-tauri-drag-region onDoubleClick={() => void getCurrentWindow().toggleMaximize()}><Sparkles size={14}/><span data-tauri-drag-region>晴笺</span></div><div className="desktop-controls"><button aria-label="最小化窗口" onClick={() => void getCurrentWindow().minimize()}><Minus size={16}/></button><button aria-label="最大化或还原窗口" onClick={() => void getCurrentWindow().toggleMaximize()}><Square size={12}/></button><button aria-label="关闭窗口" onClick={() => void getCurrentWindow().close()}><X size={16}/></button></div></div>}
-    <header className="workbench-header" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}>
-      <div className="brand"><span className="brand-mark"><Sparkles size={17}/></span><span>晴笺<small>留一点晴朗，给自己</small></span></div>
-      <nav aria-label="主导航">
-        <Nav icon={<LayoutList/>} text="记录" selected={view==='all'} onClick={()=>nav('all')}/>
-        <Nav icon={<CheckSquare/>} text="待办" selected={view==='todos'} onClick={()=>nav('todos')}/>
-        <Nav icon={<CalendarDays/>} text="记录时光" selected={view==='garden'} onClick={()=>nav('garden')}/>
-        <Nav icon={<Network/>} text="关联图" selected={view==='graph'} onClick={()=>nav('graph')}/>
-        <Nav icon={<Sparkles/>} text="伙伴" selected={view==='pet'} onClick={()=>nav('pet')}/>
-        <Nav icon={<WalletCards/>} text="账本" selected={view==='ledger'} onClick={()=>nav('ledger')}/>
-      </nav>
-      <div className="workbench-utilities"><span className="local-status"><span className="local-dot"/>记录留在本机</span><SoftButton className={view==='trash'?'active':''} onClick={()=>nav('trash')}><Trash2 size={16}/>回收站</SoftButton><SoftButton className={view==='settings'?'active':''} onClick={()=>nav('settings')}><Settings size={16}/>设置</SoftButton><SoftButton className="new-button" onClick={createInView}><Plus size={17}/>{view==='ledger'?'记一笔':view==='todos'?'添加待办':'新建记录'}</SoftButton></div>
-    </header>
-    {pinnedTags.length>0 && <div className="quick-tags" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}>{pinnedTags.map(tag=><span key={tag}><button onClick={()=>selectTag(tag)}># {tag}</button><button aria-label={`取消固定${tag}`} onClick={()=>togglePinTag(tag)}><PinOff size={13}/></button></span>)}</div>}
-    <section className="workspace" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}>
-      <header className="topbar">
-        {view==='all'||view==='trash'||view==='graph'?<div className="search"><Search size={18}/><input ref={searchRef} aria-label="搜索记录" data-search value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索记录和标签"/>{query&&<button aria-label="清除搜索" onClick={()=>setQuery('')}><X size={15}/></button>}</div>:<button className="search-link" onClick={()=>{nav('all');requestAnimationFrame(()=>searchRef.current?.focus())}}><Search size={17}/>查找记录</button>}
-        <div className="topbar-actions"><SoftButton className="quick-open-button" aria-label="快速打开" disabled={!!composer || aiOpen || tagPickerOpen} onClick={() => setQuickOpen(true)}><Search size={16}/><span>快速打开</span><kbd>Ctrl K</kbd></SoftButton><SoftButton className="ai-button" aria-label="打开晴笺 AI" onClick={() => { editHandoff.current?.cancel(); setAiOpen(true) }}><Sparkles size={17}/><span>晴笺 AI</span></SoftButton><SoftButton aria-label={theme==='light'?'使用深色':'使用浅色'} className="theme-button" onClick={() => setTheme(v=>v==='light'?'dark':'light')}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</SoftButton></div>
+    <div className="workbench-chrome" inert={!!composer || quickOpen || tagPickerOpen || aiOpen || !!wheelEntryId} aria-hidden={!!wheelEntryId}>
+      {isDesktop() && <div className="desktop-titlebar"><div className="desktop-drag" data-tauri-drag-region onDoubleClick={() => void getCurrentWindow().toggleMaximize()}><Sparkles size={14}/><span data-tauri-drag-region>晴笺</span></div><div className="desktop-controls"><button aria-label="最小化窗口" onClick={() => void getCurrentWindow().minimize()}><Minus size={16}/></button><button aria-label="最大化或还原窗口" onClick={() => void getCurrentWindow().toggleMaximize()}><Square size={12}/></button><button aria-label="关闭窗口" onClick={() => void getCurrentWindow().close()}><X size={16}/></button></div></div>}
+      <header className="workbench-header">
+        {!isDesktop() && <div className="brand"><Sparkles size={17}/><span>晴笺</span></div>}
+        <nav aria-label="主导航">
+          <Nav icon={<LayoutList/>} text="记录" selected={view==='all'} onClick={()=>nav('all')}/>
+          <Nav icon={<CheckSquare/>} text="待办" selected={view==='todos'} onClick={()=>nav('todos')}/>
+          <Nav icon={<WalletCards/>} text="账本" selected={view==='ledger'} onClick={()=>nav('ledger')}/>
+        </nav>
+        <div className="more-navigation" ref={moreRef}>
+          <button ref={moreButtonRef} className={`more-button${!['all','todos','ledger'].includes(view)?' active':''}`} aria-expanded={moreOpen} aria-controls="workspace-more" onClick={()=>setMoreOpen(value=>!value)}>{secondaryView ? `更多 · ${secondaryView}` : '更多'}<ChevronDown size={14}/></button>
+          {moreOpen && <div id="workspace-more" className="more-panel" role="region" aria-label="更多功能">
+            <button onClick={()=>nav('garden')}><CalendarDays size={16}/>记录时光</button>
+            <button onClick={()=>nav('graph')}><Network size={16}/>关联图</button>
+            <button onClick={()=>nav('pet')}><Sparkles size={16}/>伙伴</button>
+            <button onClick={()=>nav('trash')}><Trash2 size={16}/>回收站</button>
+            <button onClick={()=>nav('settings')}><Settings size={16}/>设置</button>
+            <button onClick={()=>{setMoreOpen(false);editHandoff.current?.cancel();setAiOpen(true)}}><Sparkles size={16}/>晴笺 AI</button>
+            <button onClick={()=>{setMoreOpen(false);setTheme(value=>value==='light'?'dark':'light')}}>{theme==='light'?<Moon size={16}/>:<Sun size={16}/>}使用{theme==='light'?'深色':'浅色'}</button>
+          </div>}
+        </div>
+        <div className="workbench-utilities"><SoftButton className="new-button" onClick={createInView}><Plus size={17}/>{view==='ledger'?'记一笔':view==='todos'?'添加待办':'新建记录'}</SoftButton></div>
       </header>
+      <header className="topbar">
+        {view==='all'||view==='trash'||view==='graph'?<div className="search"><Search size={18}/><input ref={searchRef} aria-label="搜索记录" data-search value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索记录和标签"/>{query&&<button aria-label="清除搜索" onClick={()=>setQuery('')}><X size={15}/></button>}<button className="search-shortcut" aria-label="快速打开" disabled={!!composer || aiOpen || tagPickerOpen} onClick={()=>setQuickOpen(true)}><kbd>Ctrl K</kbd></button></div>:<button className="search-link" onClick={()=>{nav('all');requestAnimationFrame(()=>searchRef.current?.focus())}}><Search size={17}/>查找记录</button>}
+      </header>
+      {pinnedTags.length>0 && <div className="quick-tags">{pinnedTags.map(tag=><span key={tag}><button onClick={()=>selectTag(tag)}># {tag}</button><button aria-label={`取消固定${tag}`} onClick={()=>togglePinTag(tag)}><PinOff size={13}/></button></span>)}</div>}
+    </div>
+    <section className="workspace workspace-scroll" tabIndex={0} aria-label="工作区内容" inert={!!wheelEntryId} aria-hidden={!!wheelEntryId}>
       {viewContent}
     </section>
-    <PetCompanion theme={theme} motionAllowed={motionAllowed} visible={pageVisible} businessEnabled={businessEnabled}
+    {!isDesktop() && <PetCompanion theme={theme} motionAllowed={motionAllowed} visible={pageVisible} businessEnabled={businessEnabled}
       appearance={petAppearance} onOpenNotes={() => setQuickOpen(true)} onOpenTodos={() => setTodoReminder(true)}
-      shown={petShown} hidden={!!wheelEntryId || view === 'settings' || view === 'pet' || view === 'garden' || view === 'graph'} onHide={() => setPetShown(false)}/>
+      shown={petShown} hidden={!!wheelEntryId || view === 'settings' || view === 'pet' || view === 'garden' || view === 'graph'} onHide={() => setPetShown(false)}/>}
     <input ref={importRef} className="visually-hidden" type="file" accept="application/json" disabled={!!wheelEntryId} onChange={e=>importBackup(e.target.files?.[0])}/>
     {wheelEntryId && <Modal title="记录年轮" className="celestial-wheel-frame" onClose={closeWheel}><Suspense fallback={<p role="status">正在打开记录年轮…</p>}><CelestialNoteWheel entryId={wheelEntryId} notes={activeNotes} graph={graph} theme={theme}
       motionAllowed={motionAllowed} visible={pageVisible} businessEnabled={!composer && !quickOpen && !tagPickerOpen && !aiOpen && !todoReminder}
       onClose={closeWheel} onOpenNote={openWheelRecord}/></Suspense></Modal>}
-    {composer?.type==='note'&&<NoteComposer note={composer.note} availableTags={tags} appearance={petAppearance} animatePet={ambientEnabled && !reducedMotion && pageVisible} onClose={()=>setComposer(null)} onSave={saveNote}/>}
+    {composer?.type==='note'&&<NoteComposer note={composer.note} availableTags={tags} onBusyChange={value=>{noteOperation.current=value}} onClose={message=>{setComposer(null);if(message)show(message)}} onSave={saveNote}/>}
     {composer?.type==='transaction'&&<LedgerComposer item={composer.item} initialDate={composer.date} onClose={()=>setComposer(null)} onSave={saveTransaction}/>}
     {aiOpen&&<AiPanel notes={activeNotes} transactions={transactions} onClose={()=>setAiOpen(false)} onToast={show}/>}
     {quickOpen&&<QuickOpen notes={activeNotes} onClose={() => setQuickOpen(false)} onOpen={openRecord}/>}

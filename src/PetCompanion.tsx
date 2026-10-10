@@ -1,15 +1,17 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useReducer, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { clampPetPosition, isPetTap, movePetGesture, petPolicy, reducePetMood } from './petBehavior'
 import type { PetGesture, PetMood, PetPoint, PetState } from './petBehavior'
 import { DEFAULT_PET_APPEARANCE, PET_CHARACTER_NAMES } from './petAppearance'
 import type { PetAppearance, PetCharacter } from './petAppearance'
-import { PetAccessories, PetCharacterBody } from './PetCharacters'
-import { Pet3DView } from './Pet3DView'
+import { PetPortrait } from './PetPortrait'
+import { PetFigure } from './PetFigure'
+import { resolvePetModel } from './petModels'
+import type { PetDecoration } from './Pet3DScene'
+export { PetPortrait } from './PetPortrait'
 import './pet.css'
 
 const DevModelPicker = import.meta.env.DEV ? lazy(() => import('./PetDevModelPicker').then(module => ({ default: module.PetDevModelPicker }))) : null
-const originalModelUrl = `${import.meta.env.BASE_URL}pets/xiaotuan.glb`
 
 type PetPolicyProps = { theme: 'light' | 'dark'; motionAllowed: boolean; visible: boolean; businessEnabled: boolean }
 export type PetCompanionProps = PetPolicyProps & { appearance: PetAppearance; shown: boolean; hidden: boolean; onHide(): void; onOpenNotes(): void; onOpenTodos(): void }
@@ -68,56 +70,6 @@ function usePetBehavior(props: PetPolicyProps, character: PetCharacter, shown = 
   }, [policy.interactive, props.motionAllowed, cancel])
   useLayoutEffect(() => { cancel() }, [character, cancel])
   return { state, dispatch, policy, policyRef, clearFeedback, gestureCancel, tap, rest }
-}
-
-export function PetPortrait({ appearance, mood, animate }: { appearance: PetAppearance; mood: PetMood; animate: boolean }) {
-  const id = useId().replace(/:/g, '')
-  const bodyColors = appearance.palette === 'mint' ? ['#f8fff9', '#d9f5df', '#92dcd1'] : appearance.palette === 'peach' ? ['#fffaf4', '#fce0d6', '#ebafc3'] : ['#fffcff', '#e9e1ff', '#a7dce9']
-  const earColors = appearance.palette === 'mint' ? ['#a9dbc1', '#9ee7de'] : appearance.palette === 'peach' ? ['#edb4bf', '#f9cfad'] : ['#c6b3fc', '#9ee7de']
-  return <svg viewBox="0 0 240 230" className="pet-portrait" data-character={appearance.character} data-mood={mood} data-animate={animate} aria-hidden="true">
-    <defs>
-      <linearGradient id={`${id}-body`} x1=".15" y1="0" x2=".9" y2="1">
-        <stop stopColor={bodyColors[0]}/><stop offset=".46" stopColor={bodyColors[1]}/><stop offset="1" stopColor={bodyColors[2]}/>
-      </linearGradient>
-      <linearGradient id={`${id}-ear`} x1="0" y1="0" x2="1" y2="1"><stop stopColor={earColors[0]}/><stop offset="1" stopColor={earColors[1]}/></linearGradient>
-      <radialGradient id={`${id}-glow`}><stop stopColor="#bfafff" stopOpacity=".55"/><stop offset="1" stopColor="#93dfed" stopOpacity="0"/></radialGradient>
-      <radialGradient id={`${id}-blush`}><stop stopColor="#f2a9c5" stopOpacity=".72"/><stop offset="1" stopColor="#f2a9c5" stopOpacity="0"/></radialGradient>
-    </defs>
-    <ellipse cx="120" cy="134" rx="116" ry="91" fill={`url(#${id}-glow)`} className="pet-aura"/>
-    <ellipse cx="120" cy="206" rx="56" ry="8" fill="#79729f" opacity=".12" className="pet-shadow"/>
-    <g className="pet-body">
-      {appearance.character === 'xiaotuan' ? <>
-      <path d="M73 86C52 76 44 43 59 35C73 28 91 45 95 71" fill={`url(#${id}-ear)`} stroke="#b8a9e4" strokeWidth="1.4"/>
-      <path d="M151 73C155 43 175 27 186 36C198 47 187 76 167 87" fill={`url(#${id}-ear)`} stroke="#b8a9e4" strokeWidth="1.4"/>
-      <path d="M57 152C34 152 27 164 37 174C44 180 59 174 65 169M178 152C201 147 210 160 201 169C194 177 181 174 175 168" fill={`url(#${id}-body)`} stroke="#b7bddf" strokeWidth="1.4"/>
-      <ellipse cx="92" cy="195" rx="19" ry="10" fill="#c6c0e9"/><ellipse cx="150" cy="195" rx="19" ry="10" fill="#b5d1e7"/>
-      <path d="M49 146C45 99 73 66 120 66C167 66 194 100 191 146C188 184 162 201 120 202C77 201 52 183 49 146Z" fill={`url(#${id}-body)`} stroke="#b7bddf" strokeWidth="1.5"/>
-      <path d="M66 105C75 85 91 79 107 79" fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round" opacity=".72"/>
-      <path d="M109 65C102 53 107 44 119 46C127 47 131 57 120 65" fill="#9ee2cf" stroke="#8fcbbd" strokeWidth="1.2"/>
-      <path d="M121 64C123 52 135 48 141 56C144 65 132 69 121 64" fill="#c7b1f2"/>
-      <ellipse cx="78" cy="148" rx="18" ry="11" fill={`url(#${id}-blush)`}/><ellipse cx="163" cy="148" rx="18" ry="11" fill={`url(#${id}-blush)`}/>
-      <g className="pet-gaze">
-        <g className="pet-open-eyes"><g className="pet-blink"><ellipse cx="96" cy="129" rx="7" ry="10" fill="#514668"/><ellipse cx="147" cy="129" rx="7" ry="10" fill="#514668"/><circle cx="98" cy="126" r="2.3" fill="#fff"/><circle cx="149" cy="126" r="2.3" fill="#fff"/></g></g>
-        <g className="pet-closed-eyes" stroke="#514668" strokeWidth="3" strokeLinecap="round" fill="none"><path d="M88 132Q96 137 104 132M139 132Q147 137 155 132"/></g>
-      </g>
-      <path className="pet-mouth" d="M111 147Q120 155 129 147" fill="none" stroke="#685276" strokeWidth="2.8" strokeLinecap="round"/>
-      <path className="pet-happy-mouth" d="M108 145Q120 167 133 145Z" fill="#997394"/><path className="pet-happy-mouth" d="M115 153Q120 149 127 153" stroke="#efbdce" strokeWidth="3" fill="none"/>
-      <path d="M76 178Q120 191 164 178" fill="none" stroke="#fff" strokeOpacity=".42" strokeWidth="2"/>
-      </> : <PetCharacterBody character={appearance.character} mood={mood}/>}
-      <PetAccessories appearance={appearance}/>
-    </g>
-    <g className="pet-sparkles" fill="#b9a1ec"><path d="M36 81l3 6 6 3-6 3-3 6-3-6-6-3 6-3Z"/><path d="M204 117l2 5 5 2-5 2-2 5-2-5-5-2 5-2Z"/><circle cx="193" cy="79" r="3" fill="#90d8d4"/><circle cx="44" cy="129" r="2.5" fill="#e8b4ce"/></g>
-    <g className="pet-sleep" fill="#9784bb"><text x="183" y="71" fontSize="17">z</text><text x="204" y="52" fontSize="12">z</text></g>
-  </svg>
-}
-
-function PetFigure3DOrSvg({ appearance, mood, animate, previewUrl, onError, onLoaded }: {
-  appearance: PetAppearance; mood: PetMood; animate: boolean; previewUrl?: string; onError?(message: string): void; onLoaded?(): void
-}) {
-  const modelUrl = appearance.character === 'xiaotuan' ? originalModelUrl : import.meta.env.DEV ? previewUrl : undefined
-  const fallback = <PetPortrait appearance={appearance} mood={mood} animate={animate}/>
-  return modelUrl ? <Pet3DView key={modelUrl} appearance={appearance} mood={mood} animate={animate}
-    modelUrl={modelUrl} original={appearance.character === 'xiaotuan'} fallback={fallback} onError={onError} onLoaded={onLoaded}/> : fallback
 }
 
 function viewport() {
@@ -190,7 +142,7 @@ export function PetCompanion(props: PetCompanionProps) {
       onPointerDown={start} onPointerMove={move} onPointerUp={event => end(event)} onPointerCancel={event => end(event, true)}
       onLostPointerCapture={event => { if (gesture.current?.pointerId === event.pointerId) { gesture.current = null; pet.clearFeedback(); pet.dispatch('cancel') } }}
       onClick={event => { if (event.detail === 0) pet.tap() }}>
-      {pet.policy.present && <PetFigure3DOrSvg appearance={props.appearance} mood={pet.state.mood} animate={pet.policy.animate}/>}
+      {pet.policy.present && <PetFigure appearance={props.appearance} mood={pet.state.mood} animate={pet.policy.animate}/>}
     </button>
     <p className="pet-feedback" role="status">{messages[props.appearance.character][pet.state.mood]}</p>
     <div className="pet-actions">
@@ -207,13 +159,18 @@ export function PetShowcase(props: PetShowcaseProps) {
   const [saveMessage, setSaveMessage] = useState('')
   const [devPreview, setDevPreview] = useState<{ character: PetCharacter; url: string } | null>(null)
   const [devError, setDevError] = useState('')
+  const [decorations, setDecorations] = useState<readonly PetDecoration[] | null>(null)
   const pet = usePetBehavior(props, draft.character)
   const name = PET_CHARACTER_NAMES[draft.character]
   const tryingOn = draft.character !== props.appearance.character || draft.palette !== props.appearance.palette
     || draft.head !== props.appearance.head || draft.accessory !== props.appearance.accessory
   useEffect(() => { setDraft({ ...props.appearance }) }, [props.appearance])
   useEffect(() => () => { if (devPreview) URL.revokeObjectURL(devPreview.url) }, [devPreview])
-  useEffect(() => { setDevPreview(null); setDevError('') }, [draft.character])
+  useEffect(() => { setDevPreview(null); setDevError(''); setDecorations(null) }, [draft.character])
+  const model = resolvePetModel(draft.character)
+  const hasHead = decorations?.some(name => name === 'Beret' || name === 'Halo') ?? !model
+  const hasAccessory = decorations?.some(name => name === 'Scarf' || name === 'Bow') ?? !model
+  const supports = (name: PetDecoration) => decorations?.includes(name) ?? !model
   const preview = (next: PetAppearance) => { if (pet.policyRef.current.interactive) { setDraft(next); setSaveMessage('') } }
   const apply = () => {
     if (!pet.policyRef.current.interactive) return
@@ -225,20 +182,21 @@ export function PetShowcase(props: PetShowcaseProps) {
       <div className="pet-showcase-stage" data-animate={pet.policy.animate}>
         <div className="pet-stage-halo"/><div className="pet-stage-ring"/>
         <button type="button" className="pet-touch" aria-label={`轻触${name}`} disabled={!pet.policy.interactive} onClick={pet.tap}>
-          <span className="pet-preview-transition" key={draft.character === 'xiaotuan' || (import.meta.env.DEV && devPreview?.character === draft.character)
+          <span className="pet-preview-transition" key={model || (import.meta.env.DEV && devPreview?.character === draft.character)
             ? draft.character : `${draft.character}:${draft.palette}:${draft.head}:${draft.accessory}`}>
-            <PetFigure3DOrSvg appearance={draft} mood={pet.state.mood} animate={pet.policy.animate}
+            <PetFigure appearance={draft} mood={pet.state.mood} animate={pet.policy.animate}
               previewUrl={devPreview?.character === draft.character ? devPreview.url : undefined}
-              onLoaded={() => { if (devPreview?.character === draft.character) URL.revokeObjectURL(devPreview.url) }}
-              onError={message => { setDevError(message); if (devPreview?.character === draft.character) URL.revokeObjectURL(devPreview.url) }}/>
+              onLoaded={names => { setDecorations(names); if (devPreview?.character === draft.character) URL.revokeObjectURL(devPreview.url) }}
+              onError={message => { setDevError(message); setDecorations(['Beret', 'Halo', 'Scarf', 'Bow']); if (devPreview?.character === draft.character) URL.revokeObjectURL(devPreview.url) }}/>
           </span>
         </button>
         <span className="pet-stage-caption">{name}陪你慢慢记录</span><span className="pet-preview-badge">{tryingOn ? '试穿中 · 穿上后才会保存' : '当前装扮 · 已穿上'}</span>
       </div>
       {DevModelPicker && draft.character !== 'xiaotuan' && <Suspense fallback={null}><DevModelPicker error={devError} onSelect={file => {
-        setDevError('')
+        setDevError(''); setDecorations(null)
         setDevPreview({ character: draft.character, url: URL.createObjectURL(file) })
       }}/></Suspense>}
+      {devError && <small role="status">三维展示暂不可用，已显示平面形象。</small>}
       <div className="pet-showcase-copy">
         <span className="pet-kicker">你的宠物伙伴</span><h2>{name}</h2>
         <p>{introductions[draft.character]}</p>
@@ -256,12 +214,13 @@ export function PetShowcase(props: PetShowcaseProps) {
         </button>)}
       </div></div>
       <div className="pet-wardrobe-details">
-        <div className="pet-option-group" role="group" aria-label="选择装扮配色"><h4>配色</h4><div className="pet-small-options">{palettes.map(option => <button type="button" key={option.value} aria-pressed={draft.palette === option.value} disabled={!pet.policy.interactive} onClick={() => preview({ ...draft, palette: option.value })}><PetPortrait appearance={{ ...draft, palette: option.value }} mood="idle" animate={false}/><span>{option.name}</span></button>)}</div></div>
-        <div className="pet-option-group" role="group" aria-label="选择头饰"><h4>头饰</h4><div className="pet-small-options">{heads.map(option => <button type="button" key={option.value} aria-pressed={draft.head === option.value} disabled={!pet.policy.interactive} onClick={() => preview({ ...draft, head: option.value })}><PetPortrait appearance={{ ...draft, head: option.value }} mood="idle" animate={false}/><span>{option.name}</span></button>)}</div></div>
-        <div className="pet-option-group" role="group" aria-label="选择配件"><h4>配件</h4><div className="pet-small-options">{accessories.map(option => <button type="button" key={option.value} aria-pressed={draft.accessory === option.value} disabled={!pet.policy.interactive} onClick={() => preview({ ...draft, accessory: option.value })}><PetPortrait appearance={{ ...draft, accessory: option.value }} mood="idle" animate={false}/><span>{option.name}</span></button>)}</div></div>
+        {(draft.character === 'xiaotuan' || hasHead || hasAccessory) && <div className="pet-option-group" role="group" aria-label="选择装扮配色"><h4>配色</h4><div className="pet-small-options">{palettes.map(option => <button type="button" key={option.value} aria-pressed={draft.palette === option.value} disabled={!pet.policy.interactive} onClick={() => preview({ ...draft, palette: option.value })}><PetPortrait appearance={{ ...draft, palette: option.value }} mood="idle" animate={false}/><span>{option.name}</span></button>)}</div></div>}
+        {hasHead && <div className="pet-option-group" role="group" aria-label="选择头饰"><h4>头饰</h4><div className="pet-small-options">{heads.filter(option => option.value === 'none' || supports(option.value === 'beret' ? 'Beret' : 'Halo')).map(option => <button type="button" key={option.value} aria-pressed={draft.head === option.value} disabled={!pet.policy.interactive} onClick={() => preview({ ...draft, head: option.value })}><PetPortrait appearance={{ ...draft, head: option.value }} mood="idle" animate={false}/><span>{option.name}</span></button>)}</div></div>}
+        {hasAccessory && <div className="pet-option-group" role="group" aria-label="选择配件"><h4>配件</h4><div className="pet-small-options">{accessories.filter(option => option.value === 'none' || supports(option.value === 'scarf' ? 'Scarf' : 'Bow')).map(option => <button type="button" key={option.value} aria-pressed={draft.accessory === option.value} disabled={!pet.policy.interactive} onClick={() => preview({ ...draft, accessory: option.value })}><PetPortrait appearance={{ ...draft, accessory: option.value }} mood="idle" animate={false}/><span>{option.name}</span></button>)}</div></div>}
       </div>
-      <div className="pet-option-group" role="group" aria-label="选择装扮组合"><h4>一份搭配灵感</h4><div className="pet-outfit-options">{outfits.map(outfit => <button type="button" key={outfit.name} aria-pressed={draft.palette === outfit.palette && draft.head === outfit.head && draft.accessory === outfit.accessory} disabled={!pet.policy.interactive} onClick={() => preview({ character: draft.character, palette: outfit.palette, head: outfit.head, accessory: outfit.accessory })}><PetPortrait appearance={{ character: draft.character, palette: outfit.palette, head: outfit.head, accessory: outfit.accessory }} mood="idle" animate={false}/><span>{outfit.name}</span><small>免费试穿</small></button>)}</div></div>
-      <small className="pet-character-credit">晴小团为晴笺原创角色；奶龙与三小只为指定角色的 SVG 重绘，动作由本项目设计。</small>
+      {hasHead && hasAccessory && <div className="pet-option-group" role="group" aria-label="选择装扮组合"><h4>一份搭配灵感</h4><div className="pet-outfit-options">{outfits.filter(outfit => (outfit.head === 'none' || supports(outfit.head === 'beret' ? 'Beret' : 'Halo')) && supports(outfit.accessory === 'scarf' ? 'Scarf' : 'Bow')).map(outfit => <button type="button" key={outfit.name} aria-pressed={draft.palette === outfit.palette && draft.head === outfit.head && draft.accessory === outfit.accessory} disabled={!pet.policy.interactive} onClick={() => preview({ character: draft.character, palette: outfit.palette, head: outfit.head, accessory: outfit.accessory })}><PetPortrait appearance={{ character: draft.character, palette: outfit.palette, head: outfit.head, accessory: outfit.accessory }} mood="idle" animate={false}/><span>{outfit.name}</span><small>免费试穿</small></button>)}</div></div>}
+      {decorations && (!hasHead || !hasAccessory) && <small>当前三维模型未提供此装饰。</small>}
+      <small className="pet-character-credit">晴小团为晴笺原创角色；本机三维候选用于个人展示，缺少模型时显示平面形象。</small>
     </div>
     <div className="pet-wardrobe-submit">
       <div className="pet-submit-buttons"><button type="button" className="pet-apply" disabled={!pet.policy.interactive} onClick={apply}>穿上这套</button><button type="button" disabled={!pet.policy.interactive} onClick={() => preview({ ...props.appearance })}>撤销试穿</button><button type="button" disabled={!pet.policy.interactive} onClick={() => preview({ ...DEFAULT_PET_APPEARANCE, character: draft.character })}>恢复原装</button></div>

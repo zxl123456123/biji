@@ -2,10 +2,31 @@ use super::{initialize_database, load_from_connection, save_to_connection, AppDa
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 
+#[test]
+fn attachments_survive_save_trash_restore_and_database_reinitialization() {
+  let mut conn = Connection::open_in_memory().unwrap();
+  initialize_database(&conn).unwrap();
+  let mut payload = data();
+  payload.notes[0].attachments = vec![super::NoteAttachment {
+    id: "file-1".into(), name: "合同.pdf".into(), mime: "application/pdf".into(),
+    size: 3, data: "data:application/pdf;base64,YWJj".into(),
+  }];
+  payload.notes[0].content = "".into();
+  payload.notes[0].deleted_at = Some("2026-10-10T00:00:00Z".into());
+  let expected = serde_json::to_value(&payload).unwrap();
+  save_to_connection(&mut conn, payload).unwrap();
+  initialize_database(&conn).unwrap();
+  assert_eq!(serde_json::to_value(load_from_connection(&conn).unwrap()).unwrap(), expected);
+  let mut restored = load_from_connection(&conn).unwrap();
+  restored.notes[0].deleted_at = None;
+  save_to_connection(&mut conn, restored).unwrap();
+  assert_eq!(load_from_connection(&conn).unwrap().notes[0].attachments[0].data, "data:application/pdf;base64,YWJj");
+}
+
 fn note(id: &str, created_at: &str) -> Note {
   Note { id: id.into(), content: format!("正文 {id} #测试"), status: "none".into(),
     created_at: created_at.into(), updated_at: Some("2026-10-04T09:00:00Z".into()),
-    scheduled_date: Some("2026-10-05".into()), done: false, deleted_at: None, pinned: false }
+    scheduled_date: Some("2026-10-05".into()), done: false, deleted_at: None, pinned: false, attachments: vec![] }
 }
 
 fn transaction() -> Transaction {
@@ -76,7 +97,7 @@ fn check_legacy_migration(with_deleted_at: bool) {
   initialize_database(&conn).unwrap();
   assert_eq!(old_note_fields(&conn), before);
   assert_eq!(columns(&conn), ["id", "content", "status", "created_at", "updated_at",
-    "scheduled_date", "done", "deleted_at", "pinned", "position"]);
+    "scheduled_date", "done", "deleted_at", "pinned", "position", "attachments"]);
   let loaded = load_from_connection(&conn).unwrap();
   assert_eq!(loaded.notes.iter().map(|note| note.id.as_str()).collect::<Vec<_>>(), ["a", "b", "c"]);
   assert!(loaded.notes.iter().all(|note| !note.pinned));
@@ -106,7 +127,7 @@ fn current_schema_reinitialization_preserves_array_order_pin_trash_and_transacti
   let stored_positions = positions(&conn);
   initialize_database(&conn).unwrap();
   initialize_database(&conn).unwrap();
-  assert_eq!(columns(&conn).len(), 10);
+  assert_eq!(columns(&conn).len(), 11);
   assert_eq!(serde_json::to_value(load_from_connection(&conn).unwrap()).unwrap(), expected);
   assert_eq!(positions(&conn), stored_positions);
   assert_eq!(stored_positions, vec![("oldest".into(), 1, Some(0)), ("trash".into(), 1, Some(1)),
@@ -190,7 +211,11 @@ fn old_json_without_pin_deserializes_to_false_and_new_pin_round_trips() {
 fn file_database_close_and_reopen_retains_array_metadata_and_transaction_fields() {
   let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
   let path = std::env::temp_dir().join(format!("qingjian-order-test-{}-{unique}.db", std::process::id()));
-  let payload = data();
+  let mut payload = data();
+  payload.notes[0].attachments = vec![super::NoteAttachment {
+    id: "file-on-disk".into(), name: "照片.png".into(), mime: "image/png".into(),
+    size: 3, data: "data:image/png;base64,YWJj".into(),
+  }];
   let expected = serde_json::to_value(&payload).unwrap();
   {
     let mut conn = Connection::open(&path).unwrap();

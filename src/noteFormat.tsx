@@ -1,9 +1,6 @@
 import type { Inline } from './noteCodec'
 import { colors, escapeLiteral, fenceLiteral, headingLiteral, inlineLiteral, noteHtml, parseNote, PET_DIRECTIVE, quoteLiteral, sizes } from './noteCodec'
 import { tagsFor, withoutTags } from './recordTools'
-import { DEFAULT_PET_APPEARANCE } from './petAppearance'
-import type { PetAppearance } from './petAppearance'
-import { PetPortrait } from './PetCompanion'
 
 function renderInline(nodes: Inline[]): React.ReactNode[] {
   return nodes.map((node, key) => {
@@ -15,9 +12,9 @@ function renderInline(nodes: Inline[]): React.ReactNode[] {
     return <span key={key} className={`text-${node.kind} ${node.value}`}>{body}</span>
   })
 }
-export function renderMarkdown(value: string, appearance: PetAppearance = DEFAULT_PET_APPEARANCE) {
+export function renderMarkdown(value: string) {
   return parseNote(value).map((block, key) => {
-    if (block.kind === 'pet') return <span key={key} className="embedded-pet-preview" aria-label="晴小团"><PetPortrait appearance={{ ...appearance, character: 'xiaotuan' }} mood="idle" animate={false}/><span>晴小团</span></span>
+    if (block.kind === 'pet') return <p key={key}>晴小团</p>
     if (block.kind === 'blank') return null
     if (block.kind === 'code') return <pre key={key}><code>{block.value}</code></pre>
     if (block.kind === 'list') {

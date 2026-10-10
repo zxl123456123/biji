@@ -1,4 +1,6 @@
 import type { AppData, Note, NoteDraft, Todo, Transaction } from './types'
+import { readRecord, writeRecord } from './attachmentStore.ts'
+import { validateAttachments } from './attachmentFiles.ts'
 
 const NOTES_KEY = 'luma-notes-v1'
 const TRANSACTIONS_KEY = 'luma-transactions-v1'
@@ -23,6 +25,11 @@ export function loadNotes(): Note[] {
   }))
 }
 export function saveNotes(notes: Note[]) { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)) }
+export async function loadStoredNotes(): Promise<Note[]> { return await readRecord<Note[]>('notes') ?? loadNotes() }
+export async function saveStoredNotes(notes: Note[]) { await writeRecord('notes', notes) }
+export async function loadStoredDraft(id = 'new'): Promise<NoteDraft | null> { return await readRecord<NoteDraft>(`draft:${id}`) ?? loadNoteDraft(id) }
+export async function saveStoredDraft(draft: NoteDraft, id = 'new') { await writeRecord(`draft:${id}`, draft) }
+export async function clearStoredDraft(id = 'new') { await writeRecord(`draft:${id}`); clearNoteDraft(id) }
 export function loadNoteDraft(id = 'new'): NoteDraft | null {
   try { const value = JSON.parse(localStorage.getItem(`${DRAFT_PREFIX}${id}`) ?? 'null'); return value && typeof value.content === 'string' ? value as NoteDraft : null } catch { return null }
 }
@@ -47,6 +54,10 @@ export function parseBackup(value: unknown): AppData {
   if (!value || typeof value !== 'object') throw new Error('备份文件格式不正确')
   const data = value as Partial<AppData>
   if (!Array.isArray(data.notes) || !Array.isArray(data.transactions)) throw new Error('备份中缺少记录或账目')
+  for (const note of data.notes) {
+    if (!note || typeof note.id !== 'string' || typeof note.content !== 'string') throw new Error('备份中的记录格式不正确')
+    if (note.attachments !== undefined) validateAttachments(note.attachments)
+  }
   return { version: 1, notes: data.notes as Note[], transactions: data.transactions as Transaction[], todos: Array.isArray(data.todos) ? data.todos as Todo[] : [] }
 }
 

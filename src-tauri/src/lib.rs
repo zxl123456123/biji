@@ -3,6 +3,10 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
+mod desktop_pet;
+mod desktop_pet_windows;
+mod native_bootstrap;
+mod system_tray;
 
 const SERVICE: &str = "com.zxl.qingjian";
 const ACCOUNT: &str = "deepseek_api_key";
@@ -11,7 +15,9 @@ const API_URL: &str = "https://api.deepseek.com/chat/completions";
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct Note { id: String, content: String, status: String, created_at: String, updated_at: Option<String>, scheduled_date: Option<String>, done: bool, #[serde(default)] deleted_at: Option<String>, #[serde(default)] pinned: bool }
+struct Note { id: String, content: String, status: String, created_at: String, updated_at: Option<String>, scheduled_date: Option<String>, done: bool, #[serde(default)] deleted_at: Option<String>, #[serde(default)] pinned: bool, #[serde(default)] attachments: Vec<NoteAttachment> }
+#[derive(Serialize, Deserialize, Clone)]
+struct NoteAttachment { id: String, name: String, mime: String, size: u64, data: String }
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Transaction { id: String, amount: f64, category: String, note: String, kind: String, created_at: String, updated_at: Option<String> }
@@ -47,17 +53,21 @@ fn initialize_database(conn: &Connection) -> Result<(), String> {
   if has_pinned == 0 { conn.execute("ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0", []).map_err(|e| e.to_string())?; }
   let has_position: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name='position'", [], |r| r.get(0)).map_err(|e| e.to_string())?;
   if has_position == 0 { conn.execute("ALTER TABLE notes ADD COLUMN position INTEGER", []).map_err(|e| e.to_string())?; }
+  let has_attachments: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name='attachments'", [], |r| r.get(0)).map_err(|e| e.to_string())?;
+  if has_attachments == 0 { conn.execute("ALTER TABLE notes ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]'", []).map_err(|e| e.to_string())?; }
   Ok(())
 }
 
 #[tauri::command]
-fn load_data(app: AppHandle) -> Result<AppData, String> {
+fn load_data(window: tauri::WebviewWindow, app: AppHandle) -> Result<AppData, String> {
+  desktop_pet::require_label(window.label(), "main")?;
+  native_bootstrap::require_ready(&app)?;
   let conn = connection(&app)?;
   load_from_connection(&conn)
 }
 fn load_from_connection(conn: &Connection) -> Result<AppData, String> {
-  let mut notes_stmt = conn.prepare("SELECT id, content, status, created_at, updated_at, scheduled_date, done, deleted_at, pinned FROM notes ORDER BY position IS NULL, position ASC, created_at DESC, id ASC").map_err(|e| e.to_string())?;
-  let notes = notes_stmt.query_map([], |r| Ok(Note { id:r.get(0)?, content:r.get(1)?, status:r.get(2)?, created_at:r.get(3)?, updated_at:r.get(4)?, scheduled_date:r.get(5)?, done:r.get::<_, i64>(6)? != 0, deleted_at:r.get(7)?, pinned:r.get::<_, i64>(8)? != 0 })).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
+  let mut notes_stmt = conn.prepare("SELECT id, content, status, created_at, updated_at, scheduled_date, done, deleted_at, pinned, attachments FROM notes ORDER BY position IS NULL, position ASC, created_at DESC, id ASC").map_err(|e| e.to_string())?;
+  let notes = notes_stmt.query_map([], |r| Ok(Note { id:r.get(0)?, content:r.get(1)?, status:r.get(2)?, created_at:r.get(3)?, updated_at:r.get(4)?, scheduled_date:r.get(5)?, done:r.get::<_, i64>(6)? != 0, deleted_at:r.get(7)?, pinned:r.get::<_, i64>(8)? != 0, attachments: serde_json::from_str(&r.get::<_,String>(9)?).map_err(|e| rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(e)))? })).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
   let mut tx_stmt = conn.prepare("SELECT id, amount, category, note, kind, created_at, updated_at FROM transactions ORDER BY created_at DESC").map_err(|e| e.to_string())?;
   let transactions = tx_stmt.query_map([], |r| Ok(Transaction { id:r.get(0)?, amount:r.get(1)?, category:r.get(2)?, note:r.get(3)?, kind:r.get(4)?, created_at:r.get(5)?, updated_at:r.get(6)? })).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
   let mut todo_stmt = conn.prepare("SELECT id,title,due_date,done,created_at,updated_at FROM todos ORDER BY due_date,created_at,id").map_err(|e| e.to_string())?;
@@ -66,7 +76,9 @@ fn load_from_connection(conn: &Connection) -> Result<AppData, String> {
 }
 
 #[tauri::command]
-fn save_data(app: AppHandle, data: AppData) -> Result<(), String> {
+fn save_data(window: tauri::WebviewWindow, app: AppHandle, data: AppData) -> Result<(), String> {
+  desktop_pet::require_label(window.label(), "main")?;
+  native_bootstrap::require_ready(&app)?;
   let mut conn = connection(&app)?;
   save_to_connection(&mut conn, data)
 }
@@ -75,7 +87,7 @@ fn save_to_connection(conn: &mut Connection, data: AppData) -> Result<(), String
   tx.execute("DELETE FROM notes", []).map_err(|e| e.to_string())?;
   tx.execute("DELETE FROM transactions", []).map_err(|e| e.to_string())?;
   tx.execute("DELETE FROM todos", []).map_err(|e| e.to_string())?;
-  for (position, n) in data.notes.into_iter().enumerate() { tx.execute("INSERT INTO notes (id,content,status,created_at,updated_at,scheduled_date,done,deleted_at,pinned,position) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)", params![n.id,n.content,n.status,n.created_at,n.updated_at,n.scheduled_date,n.done as i64,n.deleted_at,n.pinned as i64,position as i64]).map_err(|e| e.to_string())?; }
+  for (position, n) in data.notes.into_iter().enumerate() { tx.execute("INSERT INTO notes (id,content,status,created_at,updated_at,scheduled_date,done,deleted_at,pinned,position,attachments) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)", params![n.id,n.content,n.status,n.created_at,n.updated_at,n.scheduled_date,n.done as i64,n.deleted_at,n.pinned as i64,position as i64,serde_json::to_string(&n.attachments).map_err(|e|e.to_string())?]).map_err(|e| e.to_string())?; }
   for t in data.transactions { tx.execute("INSERT INTO transactions VALUES (?1,?2,?3,?4,?5,?6,?7)", params![t.id,t.amount,t.category,t.note,t.kind,t.created_at,t.updated_at]).map_err(|e| e.to_string())?; }
   for todo in data.todos { tx.execute("INSERT INTO todos VALUES (?1,?2,?3,?4,?5,?6)", params![todo.id,todo.title,todo.due_date,todo.done as i64,todo.created_at,todo.updated_at]).map_err(|e| e.to_string())?; }
   tx.commit().map_err(|e| e.to_string())
@@ -83,20 +95,48 @@ fn save_to_connection(conn: &mut Connection, data: AppData) -> Result<(), String
 
 fn secret_entry() -> Result<Entry, String> { Entry::new(SERVICE, ACCOUNT).map_err(|e| e.to_string()) }
 #[tauri::command]
-fn ai_configured() -> bool { secret_entry().and_then(|e| e.get_password().map_err(|x| x.to_string())).map(|v| !v.is_empty()).unwrap_or(false) }
+async fn ai_configured(window: tauri::WebviewWindow, app: AppHandle) -> Result<bool, String> {
+  desktop_pet::require_label(window.label(), "main")?;
+  native_bootstrap::require_ready(&app)?;
+  tauri::async_runtime::spawn_blocking(ai_configured_inner).await.map_err(|_| "凭据服务暂不可用".to_string())
+}
+fn ai_configured_inner() -> bool { secret_entry().and_then(|e| e.get_password().map_err(|x| x.to_string())).map(|v| !v.is_empty()).unwrap_or(false) }
 #[tauri::command]
-fn import_deepseek_config() -> Result<bool, String> {
-  if ai_configured() { return Ok(true) }
-  let home = std::env::var("USERPROFILE").map_err(|_| "未找到用户目录".to_string())?;
-  let path = PathBuf::from(home).join(".config").join("opencode").join("opencode.json");
-  let raw = fs::read_to_string(path).map_err(|_| "没有找到现有的 DeepSeek 配置".to_string())?;
-  let value: serde_json::Value = serde_json::from_str(&raw).map_err(|_| "DeepSeek 配置格式不正确".to_string())?;
-  let key = value.pointer("/provider/deepseek/options/apiKey").and_then(|v| v.as_str()).filter(|v| !v.is_empty()).ok_or("现有配置中没有 DeepSeek API 密钥".to_string())?;
-  secret_entry()?.set_password(key).map_err(|e| e.to_string())?;
-  Ok(true)
+async fn import_deepseek_config(window: tauri::WebviewWindow, app: AppHandle) -> Result<bool, String> {
+  desktop_pet::require_label(window.label(), "main")?;
+  native_bootstrap::require_ready(&app)?;
+  let gate = native_bootstrap::migration_gate(&app);
+  tauri::async_runtime::spawn_blocking(move || run_import_serialized(&gate).configured).await
+    .map_err(|_| "凭据服务暂不可用".to_string())
+}
+fn run_import_serialized(gate: &native_bootstrap::MigrationGate) -> native_bootstrap::SafeMigrationOutcome {
+  native_bootstrap::run_import(
+    gate,
+    ai_configured_inner,
+    || {
+      let home = std::env::var("USERPROFILE").map_err(|_| native_bootstrap::ImportFailure::SourceMissing)?;
+      let path = PathBuf::from(home).join(".config").join("opencode").join("opencode.json");
+      fs::read_to_string(path).map_err(|_| native_bootstrap::ImportFailure::SourceMissing)
+    },
+    |key| {
+      secret_entry().map_err(|_| native_bootstrap::ImportFailure::VaultUnavailable)?
+        .set_password(key).map_err(|_| native_bootstrap::ImportFailure::VaultUnavailable)
+    },
+  )
 }
 #[tauri::command]
-async fn ask_deepseek(request: AiRequest) -> Result<AiReply, String> {
+async fn startup_ai_migration(window: tauri::WebviewWindow, app: AppHandle) -> native_bootstrap::SafeMigrationOutcome {
+  if desktop_pet::require_label(window.label(), "main").is_err() || native_bootstrap::require_ready(&app).is_err() {
+    return native_bootstrap::SafeMigrationOutcome::failed("worker_failed");
+  }
+  let gate = native_bootstrap::migration_gate(&app);
+  tauri::async_runtime::spawn_blocking(move || run_import_serialized(&gate)).await
+    .unwrap_or_else(|_| native_bootstrap::SafeMigrationOutcome::failed("worker_failed"))
+}
+#[tauri::command]
+async fn ask_deepseek(window: tauri::WebviewWindow, request: AiRequest) -> Result<AiReply, String> {
+  desktop_pet::require_label(window.label(), "main")?;
+  native_bootstrap::require_ready(window.app_handle())?;
   let key = secret_entry()?.get_password().map_err(|_| "尚未配置 DeepSeek API 密钥".to_string())?;
   let client = reqwest::Client::new();
   let response = client.post(API_URL).bearer_auth(key).json(&serde_json::json!({
@@ -116,10 +156,20 @@ async fn ask_deepseek(request: AiRequest) -> Result<AiReply, String> {
 }
 
 pub fn run() {
-  // One-time migration from the user's existing local AI-tool configuration.
-  // The value is moved to the OS credential vault and never exposed to the webview.
-  let _ = import_deepseek_config();
-  tauri::Builder::default().plugin(tauri_plugin_opener::init()).invoke_handler(tauri::generate_handler![load_data, save_data, ai_configured, import_deepseek_config, ask_deepseek]).run(tauri::generate_context!()).expect("error while running 晴笺");
+  tauri::Builder::default().plugin(tauri_plugin_opener::init())
+    .manage(desktop_pet::PetState::default()).manage(desktop_pet_windows::NativeState::default()).manage(native_bootstrap::NativeBootstrap::default())
+    .setup(|app| { native_bootstrap::setup(app.handle()).map_err(std::io::Error::other)?; system_tray::setup(app.handle())?; Ok(()) })
+    .on_window_event(|window,event| {
+      if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        if window.label()=="main" { api.prevent_close(); let _ = window.hide(); }
+        else if window.label()=="pet" { api.prevent_close(); desktop_pet::close_pet(window.app_handle()); }
+      }
+    })
+    .invoke_handler(tauri::generate_handler![load_data, save_data, ai_configured, import_deepseek_config, startup_ai_migration, ask_deepseek, native_bootstrap::bootstrap_entry_ready,
+      desktop_pet::pet_begin_owner,desktop_pet::pet_end_owner,desktop_pet::pet_publish,desktop_pet::pet_read,
+      desktop_pet::pet_action,desktop_pet::pet_action_result,desktop_pet::pet_geometry,desktop_pet::pet_move_begin,
+      desktop_pet::pet_move_step,desktop_pet::pet_move_cancel,desktop_pet::pet_drag,desktop_pet::pet_drag_finish,desktop_pet::pet_recall])
+    .run(tauri::generate_context!()).expect("error while running 晴笺");
 }
 
 #[cfg(test)]
