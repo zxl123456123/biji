@@ -33,6 +33,8 @@
 - `docs/Search.Experience.md`：统一可见正文/标签查找、首命中摘要、字形高亮与内存缓存边界。
 - `docs/current/celestial-note-wheel/`：十二个月记录年轮的当前方案与验证；`docs/Spatial.Experience.md`：旧 3D 空间历史文档的归档入口。
 - `docs/Pet.Wardrobe.md`：五角色、免费试穿与已应用外观、共享画像及局部动态许可。
+- `docs/Note.Attachments.md`：本机图片和文件附件、大小限制、IndexedDB/SQLite 兼容及旧版回写限制。
+- `docs/Release.Verification.0.9.0.md` 至 `docs/Release.Verification.0.9.3.md`：0.9.x 制品身份、已测和未测边界。
 - `docs/Release.Verification.0.8.0.md`：0.8.0 同源测试、程序 EXE/NSIS/MSI 身份、失败与未测。
 - `docs/archive/2026-10-06/spatial-note-map/`：已移除旧 3D 空间的 0.6.0 历史设计与验证。
 - `docs/Release.Verification.0.7.0.md`：隔离发布来源、角色/空间及月历快照证据、制品、失败和未测。
