@@ -10,7 +10,7 @@ import './desktop-pet.css'
 export default function DesktopPet() {
   const [snapshot, setSnapshot] = useState<PetSnapshot | null>(null), [visible, setVisible] = useState(false)
   const [menu, setMenu] = useState(false), [hovered, setHovered] = useState(false), [rest, setRest] = useState(false), [autoRest, setAutoRest] = useState(false)
-  const [happy, setHappy] = useState(false), [moving, setMoving] = useState(false), [dragging, setDragging] = useState(false), [busy, setBusy] = useState(false)
+  const [happy, setHappy] = useState(false), [moving, setMoving] = useState(false), [looking, setLooking] = useState(false), [dragging, setDragging] = useState(false), [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState(false), [error, setError] = useState(''), [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [decision, setDecision] = useState(0)
   const snapshotRef = useRef(snapshot); snapshotRef.current = snapshot
@@ -121,16 +121,22 @@ export default function DesktopPet() {
     const timer = setTimeout(() => setHappy(false), 1400); return () => clearTimeout(timer)
   }, [happy])
   useEffect(() => {
+    if (!looking) return
+    const timer = setTimeout(() => setLooking(false), 2400)
+    return () => clearTimeout(timer)
+  }, [looking])
+  useEffect(() => {
     if (!autoRest) return
     const timer = setTimeout(() => setAutoRest(false), 12_000 + Math.random() * 8_000)
     return () => clearTimeout(timer)
   }, [autoRest])
   useEffect(() => {
-    if (!animate || hovered || menu || happy || moving) return
+    if (!animate || hovered || menu || happy || moving || looking) return
     let cancelled = false
     const timer = setTimeout(() => {
       const random = Math.random()
-      if (random < .6) { setDecision(value => value + 1); return }
+      if (random < .45) { setDecision(value => value + 1); return }
+      if (random < .7) { setLooking(true); return }
       if (random >= .9) { setAutoRest(true); return }
       void (async () => {
         try {
@@ -144,7 +150,7 @@ export default function DesktopPet() {
       })()
     }, 30_000 + Math.random() * 20_000)
     return () => { cancelled = true; clearTimeout(timer); movement.current.stop() }
-  }, [animate, hovered, menu, happy, decision])
+  }, [animate, hovered, menu, happy, looking, decision])
   useEffect(() => {
     if (!animate || hovered || menu) stop()
     if (!present) { setMenu(false); setNotice(false); setAutoRest(false) }
@@ -209,7 +215,7 @@ export default function DesktopPet() {
           if (p && !p.started) { setRest(false); setAutoRest(false); setHappy(true); setError(''); void inspectDrag() }
           pointer.current = null
         }}>
-        <PetFigure appearance={snapshot.appearance} mood={dragging ? 'dragging' : rest || autoRest ? 'resting' : happy ? 'happy' : 'idle'} animate={animate} activity={moving ? 'walk' : undefined} onError={() => setError('三维暂不可用，已显示静态伙伴')}/>
+        <PetFigure appearance={snapshot.appearance} mood={dragging ? 'dragging' : rest || autoRest ? 'resting' : happy ? 'happy' : 'idle'} animate={animate} activity={moving ? 'walk' : looking ? 'look' : undefined} onError={() => setError('三维暂不可用，已显示静态伙伴')}/>
       </div>
       <button ref={moreButton} className="desktop-pet-more" aria-label="伙伴更多操作" aria-expanded={menu} onClick={() => { stop(); setMenu(value => !value); void inspectDrag() }}>···</button>
       {menu && <div className="desktop-pet-menu" aria-label="伙伴操作"><button disabled={busy} onClick={() => action('quick-note')}>快记</button><button disabled={busy} onClick={() => action('open-todos')}>待办</button><button onClick={() => { stop(); setAutoRest(false); setRest(value => !value); setMenu(false) }}>{rest ? '唤醒' : '休息'}</button><button disabled={busy} onClick={() => action('hide')}>收起</button></div>}

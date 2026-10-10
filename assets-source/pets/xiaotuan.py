@@ -63,6 +63,13 @@ def ellipsoid(name, location, scale, material, parent=root):
     return ob
 
 
+def hinge(name, location, parent=root):
+    """Put a visible part on a local pivot so clips can move it without sliding the mesh origin."""
+    ob = group(name, parent)
+    ob.location = location
+    return ob
+
+
 def tube(name, coords, radius, material, parent=root, closed=False):
     curve = bpy.data.curves.new(name, 'CURVE')
     curve.dimensions = '3D'
@@ -83,27 +90,31 @@ def tube(name, coords, radius, material, parent=root, closed=False):
 body = group('Body')
 ellipsoid('BodyShell', (0, 0, 1.03), (0.94, 0.70, 0.86), cloud, body)
 for sign, color in [(-1, lilac), (1, mint)]:
-    ear = ellipsoid(('EarLeft' if sign < 0 else 'EarRight'), (sign * 0.65, 0.05, 1.95), (0.25, 0.17, 0.54), color)
-    ear.rotation_euler[1] = sign * -0.40
-    inner = ellipsoid(('EarInnerLeft' if sign < 0 else 'EarInnerRight'), (sign * 0.65, -0.125, 1.99), (0.14, 0.045, 0.37), blush)
+    ear = hinge('EarLeft' if sign < 0 else 'EarRight', (sign * 0.52, 0.02, 1.58))
+    ear_shell = ellipsoid('EarShell', (sign * 0.13, 0.03, 0.37), (0.25, 0.17, 0.54), color, ear)
+    ear_shell.rotation_euler[1] = sign * -0.40
+    inner = ellipsoid('EarInner', (sign * 0.13, -0.145, 0.41), (0.14, 0.045, 0.37), blush, ear)
     inner.rotation_euler[1] = sign * -0.40
-    ellipsoid(('FootLeft' if sign < 0 else 'FootRight'), (sign * 0.47, -0.15, 0.23), (0.25, 0.29, 0.15), color)
+    foot = hinge('FootLeft' if sign < 0 else 'FootRight', (sign * 0.34, -0.02, 0.36))
+    ellipsoid('FootMesh', (sign * 0.13, -0.13, -0.13), (0.25, 0.29, 0.15), color, foot)
     arm = group('ArmLeft' if sign < 0 else 'ArmRight')
     arm.location = (sign * 0.77, 0, 0.93)
-    ellipsoid('PawMesh', (sign * 0.15, -0.08, -0.13), (0.26, 0.23, 0.20), cloud, arm)
+    paw = ellipsoid('PawMesh', (sign * 0.15, -0.08, -0.13), (0.26, 0.23, 0.20), cloud, arm)
+    paw.rotation_euler[0] = 0.20
     ellipsoid(('CheekLeft' if sign < 0 else 'CheekRight'), (sign * 0.59, -0.519, 1.04), (0.17, 0.026, 0.085), blush)
     ellipsoid(('EyeLeft' if sign < 0 else 'EyeRight'), (sign * 0.36, -0.689, 1.25), (0.085, 0.045, 0.12), eyes)
     ellipsoid(('EyeLightLeft' if sign < 0 else 'EyeLightRight'), (sign * 0.34, -0.734, 1.30), (0.025, 0.014, 0.03), shine)
 
 # Two leaves make the existing illustrated tuft legible from the side as well.
 for name, sign, material in [('LeafLeft', -1, mint), ('LeafRight', 1, lilac)]:
-    leaf = ellipsoid(name, (sign * 0.15, -0.03, 2.03), (0.23, 0.10, 0.14), material)
-    for vertex in leaf.data.vertices:
+    leaf = hinge(name, (0, 0, 1.95))
+    mesh = ellipsoid('LeafMesh', (sign * 0.15, -0.03, 0.08), (0.23, 0.10, 0.14), material, leaf)
+    mesh.rotation_euler[1] = sign * 0.28
+    for vertex in mesh.data.vertices:
         outward = max(0, sign * vertex.co.x / 0.23)
         vertex.co.y *= 1 - 0.65 * outward
         vertex.co.z *= 1 - 0.65 * outward
         vertex.co.z += 0.10 * outward
-    leaf.rotation_euler[1] = sign * 0.28
 tube('Smile', [(-0.13, -0.688, 0.97), (-0.06, -0.720, 0.92), (0.06, -0.720, 0.92), (0.13, -0.688, 0.97)], 0.020, eyes)
 
 # Optional wardrobes keep full local transforms in glTF. The app owns visibility.
@@ -128,21 +139,40 @@ scene.frame_start = 1
 scene.frame_end = 48
 
 
-def clip(name, root_points, arm_points):
-    for ob in (root, bpy.data.objects['ArmRight']):
+# Local controls stay on the exclusive character. Missing curves keep the rest pose.
+CLIP_CONTROLS = (
+    'PetRoot', 'Body', 'EarLeft', 'EarRight', 'LeafLeft', 'LeafRight',
+    'ArmLeft', 'ArmRight', 'FootLeft', 'FootRight',
+)
+
+
+def clip(name, curves):
+    controls = [bpy.data.objects[control] for control in CLIP_CONTROLS]
+    rest_pose = {ob: (ob.location.copy(), ob.rotation_euler.copy()) for ob in controls}
+    for ob in controls:
         if ob.animation_data:
             ob.animation_data.action = None
-    for frame, z, angle in root_points:
-        root.location.z = z
-        root.keyframe_insert(data_path='location', frame=frame)
-        root.rotation_euler[2] = angle
-        root.keyframe_insert(data_path='rotation_euler', frame=frame)
-    arm = bpy.data.objects['ArmRight']
-    for frame, angle in arm_points:
-        arm.rotation_euler[1] = angle
-        arm.keyframe_insert(data_path='rotation_euler', frame=frame)
-    for ob in (root, arm):
-        action = ob.animation_data.action
+    for control, channel, samples in curves:
+        ob = bpy.data.objects[control]
+        for frame, value in samples:
+            if channel == 'location.z':
+                ob.location.z = value
+                ob.keyframe_insert(data_path='location', index=2, frame=frame)
+            else:
+                index = {'x': 0, 'y': 1, 'z': 2}[channel]
+                ob.rotation_euler[index] = value
+                ob.keyframe_insert(data_path='rotation_euler', index=index, frame=frame)
+    for ob in controls:
+        action = ob.animation_data.action if ob.animation_data else None
+        if action is None:
+            continue
+        # Blender groups a whole transform when one axis is keyed; keep only authored axes.
+        for layer in action.layers:
+            for strip in layer.strips:
+                for bag in strip.channelbags:
+                    for curve in list(bag.fcurves):
+                        if not curve.keyframe_points:
+                            bag.fcurves.remove(curve)
         action.name = name
         track = ob.animation_data.nla_tracks.new()
         track.name = name
@@ -150,14 +180,64 @@ def clip(name, root_points, arm_points):
         strip.action_frame_start = 1
         strip.action_frame_end = 48
         ob.animation_data.action = None
-    root.location.z = 0
-    root.rotation_euler[2] = 0
-    arm.rotation_euler[1] = 0
+    for ob, (location, rotation) in rest_pose.items():
+        ob.location = location
+        ob.rotation_euler = rotation
 
 
-# Both clips are authored on the same controls; NLA tracks keep them separately editable.
-clip('idle', [(1, 0, 0), (24, 0.035, 0.012), (48, 0, 0)], [(1, 0), (24, 0.04), (48, 0)])
-clip('happy', [(1, 0, 0), (12, 0.13, -0.10), (24, 0.03, 0.08), (36, 0.13, -0.10), (48, 0, 0)], [(1, 0), (12, -0.8), (24, -0.2), (36, -0.8), (48, 0)])
+# Loops start and end on the rest pose so crossfades do not pop.
+clip('idle', [
+    ('PetRoot', 'location.z', [(1, 0), (24, 0.035), (48, 0)]),
+    ('PetRoot', 'z', [(1, 0), (24, 0.012), (48, 0)]),
+    ('Body', 'x', [(1, 0), (24, 0.025), (48, 0)]),
+    ('EarLeft', 'z', [(1, 0), (24, 0.05), (48, 0)]),
+    ('EarRight', 'z', [(1, 0), (24, -0.05), (48, 0)]),
+    ('LeafLeft', 'z', [(1, 0), (24, 0.06), (48, 0)]),
+    ('LeafRight', 'z', [(1, 0), (24, -0.06), (48, 0)]),
+    ('ArmLeft', 'y', [(1, 0), (24, 0.04), (48, 0)]),
+    ('ArmRight', 'y', [(1, 0), (24, -0.04), (48, 0)]),
+])
+clip('happy', [
+    ('PetRoot', 'location.z', [(1, 0), (12, 0.13), (24, 0.03), (36, 0.13), (48, 0)]),
+    ('PetRoot', 'z', [(1, 0), (12, -0.10), (24, 0.08), (36, -0.10), (48, 0)]),
+    ('Body', 'x', [(1, 0), (12, -0.05), (24, 0.02), (36, -0.05), (48, 0)]),
+    ('EarLeft', 'z', [(1, 0), (12, 0.18), (24, 0.04), (36, 0.18), (48, 0)]),
+    ('EarRight', 'z', [(1, 0), (12, -0.18), (24, -0.04), (36, -0.18), (48, 0)]),
+    ('LeafLeft', 'z', [(1, 0), (12, 0.22), (24, 0.05), (36, 0.22), (48, 0)]),
+    ('LeafRight', 'z', [(1, 0), (12, -0.22), (24, -0.05), (36, -0.22), (48, 0)]),
+    ('ArmLeft', 'y', [(1, 0), (12, 0.8), (24, 0.2), (36, 0.8), (48, 0)]),
+    ('ArmRight', 'y', [(1, 0), (12, -0.8), (24, -0.2), (36, -0.8), (48, 0)]),
+    ('FootLeft', 'x', [(1, 0), (12, -0.18), (24, 0), (36, -0.18), (48, 0)]),
+    ('FootRight', 'x', [(1, 0), (12, -0.18), (24, 0), (36, -0.18), (48, 0)]),
+])
+clip('look', [
+    ('PetRoot', 'y', [(1, 0), (16, 0.22), (32, 0.22), (48, 0)]),
+    ('EarLeft', 'z', [(1, 0), (16, 0.08), (32, 0.08), (48, 0)]),
+    ('EarRight', 'z', [(1, 0), (16, 0.12), (32, 0.12), (48, 0)]),
+    ('LeafLeft', 'z', [(1, 0), (16, 0.06), (32, 0.06), (48, 0)]),
+    ('LeafRight', 'z', [(1, 0), (16, -0.04), (32, -0.04), (48, 0)]),
+])
+clip('rest', [
+    ('PetRoot', 'location.z', [(1, 0), (16, -0.08), (48, -0.08)]),
+    ('PetRoot', 'x', [(1, 0), (16, 0.16), (48, 0.16)]),
+    ('EarLeft', 'x', [(1, 0), (16, 0.28), (48, 0.28)]),
+    ('EarRight', 'x', [(1, 0), (16, 0.28), (48, 0.28)]),
+    ('LeafLeft', 'x', [(1, 0), (16, 0.12), (48, 0.12)]),
+    ('LeafRight', 'x', [(1, 0), (16, 0.12), (48, 0.12)]),
+    ('ArmLeft', 'x', [(1, 0), (16, 0.35), (48, 0.35)]),
+    ('ArmRight', 'x', [(1, 0), (16, 0.35), (48, 0.35)]),
+])
+clip('walk', [
+    ('PetRoot', 'location.z', [(1, 0), (12, 0.07), (24, 0), (36, 0.07), (48, 0)]),
+    ('PetRoot', 'z', [(1, 0), (12, 0.06), (24, 0), (36, -0.06), (48, 0)]),
+    ('Body', 'x', [(1, 0), (12, 0.08), (24, 0), (36, -0.08), (48, 0)]),
+    ('EarLeft', 'x', [(1, 0), (12, 0.10), (24, 0), (36, -0.10), (48, 0)]),
+    ('EarRight', 'x', [(1, 0), (12, -0.10), (24, 0), (36, 0.10), (48, 0)]),
+    ('ArmLeft', 'x', [(1, 0), (12, 0.55), (24, 0), (36, -0.35), (48, 0)]),
+    ('ArmRight', 'x', [(1, 0), (12, -0.35), (24, 0), (36, 0.55), (48, 0)]),
+    ('FootLeft', 'y', [(1, 0), (12, -0.95), (24, 0), (36, 0.35), (48, 0)]),
+    ('FootRight', 'y', [(1, 0), (12, 0.35), (24, 0), (36, -0.95), (48, 0)]),
+])
 
 # Save the editable model before adding render-only objects.
 blend_path = os.path.join(out_dir, 'xiaotuan.blend')
@@ -189,7 +269,7 @@ def merge_animation_tracks(path):
         shift = len(target['samplers'])
         target['samplers'].extend(animation['samplers'])
         target['channels'].extend({**channel, 'sampler': channel['sampler'] + shift} for channel in animation['channels'])
-    assert set(merged) == {'idle', 'happy'}
+    assert set(merged) == {'idle', 'happy', 'walk', 'look', 'rest'}
     doc['animations'] = list(merged.values())
     json_bytes = json.dumps(doc, separators=(',', ':')).encode('utf-8')
     json_bytes += b' ' * (-len(json_bytes) % 4)

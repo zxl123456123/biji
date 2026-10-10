@@ -81,7 +81,7 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
   }
   const setAnimate = (next: boolean) => {
     animationRequested = next
-    animated = next && mood !== 'resting'
+    animated = next || mood === 'resting'
     cancelAnimationFrame(frame)
     if (animated && !disposed) {
       lastTime = performance.now()
@@ -96,6 +96,8 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
     const preferred = mood === 'resting' ? 'rest' : mood === 'happy' ? 'happy' : activity ?? 'idle'
     const clip = gltf.animations.find(item => item.name === preferred) ?? gltf.animations.find(item => item.name === 'idle')!
     const nextAction = mixer!.clipAction(clip)
+    nextAction.clampWhenFinished = clip.name === 'rest'
+    nextAction.setLoop(clip.name === 'rest' ? THREE.LoopOnce : THREE.LoopRepeat, clip.name === 'rest' ? 1 : Infinity)
     if (action !== nextAction) {
       action?.stop()
       nextAction.reset().play()

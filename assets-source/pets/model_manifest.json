@@ -5,21 +5,70 @@
   "blender_version": "5.2.2 LTS",
   "clips": {
     "happy": {
-      "channel_count": 3,
+      "channel_count": 11,
       "node_targets": [
+        "ArmLeft",
         "ArmRight",
+        "Body",
+        "EarLeft",
+        "EarRight",
+        "FootLeft",
+        "FootRight",
+        "LeafLeft",
+        "LeafRight",
         "PetRoot"
       ]
     },
     "idle": {
-      "channel_count": 3,
+      "channel_count": 9,
       "node_targets": [
+        "ArmLeft",
         "ArmRight",
+        "Body",
+        "EarLeft",
+        "EarRight",
+        "LeafLeft",
+        "LeafRight",
+        "PetRoot"
+      ]
+    },
+    "look": {
+      "channel_count": 5,
+      "node_targets": [
+        "EarLeft",
+        "EarRight",
+        "LeafLeft",
+        "LeafRight",
+        "PetRoot"
+      ]
+    },
+    "rest": {
+      "channel_count": 8,
+      "node_targets": [
+        "ArmLeft",
+        "ArmRight",
+        "EarLeft",
+        "EarRight",
+        "LeafLeft",
+        "LeafRight",
+        "PetRoot"
+      ]
+    },
+    "walk": {
+      "channel_count": 9,
+      "node_targets": [
+        "ArmLeft",
+        "ArmRight",
+        "Body",
+        "EarLeft",
+        "EarRight",
+        "FootLeft",
+        "FootRight",
         "PetRoot"
       ]
     }
   },
-  "node_count": 36,
+  "node_count": 42,
   "previews": [
     "E:\\project-funny\\biji\\assets-source\\pets\\previews\\xiaotuan_front.png",
     "E:\\project-funny\\biji\\assets-source\\pets\\previews\\xiaotuan_side.png",
@@ -27,12 +76,12 @@
   ],
   "files": {
     "xiaotuan.blend": {
-      "size": 258075,
-      "sha256": "664bf14f1b7e1675b57f38cd2ea5a671470abc41e2d316a06b3059dbc90096d2"
+      "size": 265297,
+      "sha256": "256ac96085d51571dc5c6cd517eef233a18e3fda6986572117ae3288a6674442"
     },
     "xiaotuan.glb": {
-      "size": 766924,
-      "sha256": "c115b08b8cbc17737602060293549e81766ec777a53b7b5d4dfee36bf470884a"
+      "size": 814320,
+      "sha256": "85d83c16bbdb199dbdf64de509a0ba5256f9a31967757a2d9710b18199d9bd48"
     },
     "xiaotuan_front.png": {
       "size": 299964,
@@ -47,6 +96,6 @@
       "sha256": "ec8260d6238ad1729ef8f5fd9f5aa53e1822592ad25ad21161c5e00f78fa0285"
     }
   },
-  "visual_status": "outline approved; final detail awaiting user review",
+  "visual_status": "outline approved; animation rebuild awaiting user review",
   "back_view_status": "original completion; no official back reference"
 }
