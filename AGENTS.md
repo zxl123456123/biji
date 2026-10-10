@@ -15,7 +15,7 @@
 ## 代码入口
 
 - `src/main.tsx`：按浏览器、桌面主窗和桌面伙伴窗分流。
-- `src/App.tsx`：主窗状态、八个页面分流和弹层挂载；编辑器、账本与伙伴本体在各自文件。
+- `src/App.tsx`：主窗状态、八个页面分流和弹层挂载。设置页在 `SettingsView.tsx`，AI 面板在 `AiPanel.tsx`，编辑器、账本与伙伴本体在各自文件。
 - `src/styles.css`：主题、布局、响应式与交互动效。
 - `src/store.ts`：浏览器本地存储、备份与迁移。
 - `src/desktop.ts`：Tauri 数据与 AI 桥接。

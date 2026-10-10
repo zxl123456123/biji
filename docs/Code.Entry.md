@@ -35,7 +35,7 @@
 
 记录时光、关联图和记录年轮按需加载。年轮从记录页打开，不占用主导航。
 
-弹层仍由 `App.tsx` 挂载：`NoteComposer`、`LedgerComposer`、`AiPanel`、`QuickOpen`、`TagPicker`。`AiPanel` 目前定义在 `App.tsx` 内。
+弹层仍由 `App.tsx` 挂载：`NoteComposer`、`LedgerComposer`、`AiPanel`、`QuickOpen`、`TagPicker`。设置页在 `SettingsView.tsx`，AI 面板在 `AiPanel.tsx`。
 
 保存入口是 `App.tsx` 的 `persist`。桌面端走 `src/desktop.ts`，浏览器走 `src/store.ts`。两条路径都由 `App.tsx` 决定，页面组件不直接选择存储。
 
