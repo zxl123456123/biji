@@ -11,3 +11,4 @@ src-tauri/gen/
 .DS_Store
 Thumbs.db
 /src/local-pet-models/
+/assets-source/pets/previews/motion/

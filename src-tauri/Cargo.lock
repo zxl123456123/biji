@@ -2801,7 +2801,7 @@ dependencies = [
 
 [[package]]
 name = "qingjian"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "keyring",
  "reqwest 0.12.28",
