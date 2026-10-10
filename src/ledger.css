@@ -1,0 +1,55 @@
+.ledger-history .heading { align-items: center; gap: 16px; }
+.ledger-history .heading .soft-button { flex: none; }
+.ledger-toolbar, .ledger-period { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ledger-toolbar { justify-content: space-between; margin-bottom: 20px; gap: 14px; }
+.ledger-period button { display: grid; place-items: center; min-width: 32px; min-height: 34px; border-radius: 9px; background: var(--surface); color: var(--muted); }
+.ledger-period button:hover, .ledger-month-card:hover { background: var(--accent-soft); color: var(--accent); }
+.ledger-period button:disabled { opacity: .4; }
+.ledger-period input { min-width: 0; width: 145px; padding: 7px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 9px; font-size: 12px; }
+.ledger-period .ledger-current { padding: 0 10px; font-size: 11px; background: transparent; }
+.ledger-history .stat-grid { margin-bottom: 8px; }
+.ledger-balance-hint { margin: 0 0 23px; color: var(--muted); font-size: 11px; }
+.ledger-detail { display: grid; grid-template-columns: minmax(210px, .8fr) minmax(0, 1.5fr); gap: 18px; align-items: start; }
+.ledger-detail .spending { margin: 0; }
+.ledger-history .bar-row { grid-template-columns: minmax(32px, .6fr) minmax(20px, 1fr) auto; }
+.ledger-history .bar-row span { overflow-wrap: anywhere; }
+.ledger-history .bar-row small { grid-column: 3; text-align: right; font-size: 10px; }
+.ledger-no-spending { margin: 24px 0; color: var(--muted); font-size: 12px; }
+.ledger-day > header { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 19px 0 5px; }
+.ledger-day h3 { font-size: 12px; margin: 0; font-weight: 500; }
+.ledger-day header span { color: var(--muted); font-size: 10px; }
+.ledger-history .transaction { gap: 9px; }
+.ledger-history .delete-transaction { opacity: 1; padding: 7px; border-radius: 8px; color: var(--muted); background: transparent; }
+.ledger-history .delete-transaction:hover { color: var(--orange); background: var(--orange-soft); }
+.ledger-year { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 21px 21px; background: var(--surface); }
+.ledger-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.ledger-month-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); text-align: left; }
+.ledger-month-card > div, .ledger-month-card dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; }
+.ledger-month-card b { font-size: 14px; font-weight: 500; }
+.ledger-month-card small, .ledger-month-card dt { font-size: 11px; color: var(--muted); }
+.ledger-month-card dl { margin: 15px 0 0; }
+.ledger-month-card dl > div { margin-top: 9px; flex-wrap: wrap; }
+.ledger-month-card dd { margin: 0; font: 12px var(--mono); overflow-wrap: anywhere; }
+.ledger-month-card .income { color: var(--green); }
+.ledger-month-card .expense { color: var(--orange); }
+.ledger-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ledger-note-field { grid-column: 1 / -1; }
+.ledger-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.content.ledger-with-pet { padding-bottom: 320px; }
+.ledger-with-pet :is(.ledger-month-card, .transaction button, .ledger-empty button) { scroll-margin-bottom: 300px; }
+@media (min-width: 721px) { .content.ledger-with-pet { padding-right: clamp(30px, calc(1390px - 100vw), 260px); } }
+@media (max-width: 720px) { .content.ledger-with-pet { padding-bottom: 340px; } }
+@media (max-width: 1100px) { .ledger-detail { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .ledger-history .heading h1 { font-size: 23px; }
+  .ledger-months { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .ledger-month-card { padding: 12px; }
+  .ledger-history .stat-grid { grid-template-columns: 1fr; gap: 8px; }
+  .ledger-history .stat { min-height: 72px; flex-direction: row; align-items: center; gap: 10px; }
+  .ledger-history .stat b { font-size: 18px; }
+  .ledger-history .ledger-list, .ledger-year, .ledger-history .spending { padding-left: 14px; padding-right: 14px; }
+  .ledger-history .transaction { flex-wrap: wrap; }
+  .ledger-history .transaction-main { flex-basis: calc(100% - 45px); }
+  .ledger-history .transaction strong { margin-left: 45px; white-space: normal; overflow-wrap: anywhere; max-width: calc(100% - 90px); }
+  .ledger-history .delete-transaction { margin-left: auto; }
+}
