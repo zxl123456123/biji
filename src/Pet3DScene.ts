@@ -1,11 +1,13 @@
 import type { AnimationAction, Material, Mesh, Object3D, Texture } from 'three'
 import type { PetAppearance } from './petAppearance'
 import type { PetMood } from './petBehavior'
+import { PET_CROSSFADE_SECONDS, clipForMood, clipLoops, resolveClip, type PetFacing } from './petPerformance.ts'
 
 export type Pet3DScene = {
   decorations: readonly PetDecoration[]
   setAppearance(appearance: PetAppearance): void
   setMood(mood: PetMood, activity?: PetActivity): void
+  setFacing(facing: PetFacing): void
   setAnimate(animate: boolean): void
   resize(width: number, height: number): void
   dispose(): void
@@ -45,6 +47,7 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
   let frame = 0
   let lastTime = 0
   let action: AnimationAction | null = null
+  let facing: PetFacing = 'right'
   let mixer: InstanceType<typeof THREE.AnimationMixer> | null = null
   let viewExtent = 1.55
   let decorations: PetDecoration[] = []
@@ -91,16 +94,26 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
       render()
     }
   }
+  const applyFacing = () => { if (root) root.scale.x = Math.abs(root.scale.x) * (facing === 'left' ? -1 : 1) }
+  const setFacing = (next: PetFacing) => {
+    if (facing === next) return
+    facing = next
+    applyFacing()
+    render()
+  }
   const setMood = (next: PetMood, activity?: PetActivity) => {
     mood = next
-    const preferred = mood === 'resting' ? 'rest' : mood === 'happy' ? 'happy' : activity ?? 'idle'
-    const clip = gltf.animations.find(item => item.name === preferred) ?? gltf.animations.find(item => item.name === 'idle')!
+    const names = gltf.animations.map(item => item.name)
+    const chosen = resolveClip(clipForMood(mood, activity), names)
+    const clip = gltf.animations.find(item => item.name === chosen)!
     const nextAction = mixer!.clipAction(clip)
-    nextAction.clampWhenFinished = clip.name === 'rest'
-    nextAction.setLoop(clip.name === 'rest' ? THREE.LoopOnce : THREE.LoopRepeat, clip.name === 'rest' ? 1 : Infinity)
+    nextAction.enabled = true
+    nextAction.clampWhenFinished = !clipLoops(chosen)
+    nextAction.setLoop(clipLoops(chosen) ? THREE.LoopRepeat : THREE.LoopOnce, clipLoops(chosen) ? Infinity : 1)
     if (action !== nextAction) {
-      action?.stop()
+      const previous = action
       nextAction.reset().play()
+      if (previous?.isRunning()) previous.crossFadeTo(nextAction, PET_CROSSFADE_SECONDS, false)
       action = nextAction
     }
     setAnimate(animationRequested)
@@ -176,8 +189,9 @@ export async function createPet3DScene(canvas: HTMLCanvasElement, modelUrl: stri
     camera.top = viewExtent; camera.bottom = -viewExtent; camera.left = -viewExtent; camera.right = viewExtent
     camera.updateProjectionMatrix()
     mixer = new THREE.AnimationMixer(root)
+    applyFacing()
     setMood('idle')
-    return { decorations, setAppearance, setMood, setAnimate, resize, dispose }
+    return { decorations, setAppearance, setMood, setFacing, setAnimate, resize, dispose }
   } catch (error) {
     dispose()
     throw error

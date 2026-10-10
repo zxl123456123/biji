@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { acceptSnapshot, reminderQualified } from '../src/desktopPetProtocol.ts'
 import { clampPetPoint, createPetMovement } from '../src/desktopPetMotion.ts'
+import { planPetWalk } from '../src/petPerformance.ts'
+import { PET_CROSSFADE_SECONDS, clipForMood, clipLoops, resolveClip } from '../src/petPerformance.ts'
 
 const geometry = { position: { x: -800, y: 250 }, outerSize: { width: 220, height: 260 }, workArea: { x: -1920, y: -120, width: 1920, height: 1080 }, scaleFactor: 1.5 }
 test('late snapshot cannot roll back a newer owner or invalidate its current reminder', () => {
@@ -33,8 +35,26 @@ test('cancel during an in-flight native step prevents all remaining positions fr
   const started = new Promise(resolve => { firstStep = resolve })
   const steps = [], cancelled = []
   const movement = createPetMovement(async (id, point) => { steps.push({ id, point }); firstStep(); await new Promise(resolve => { resolveStep = resolve }) }, async id => { cancelled.push(id) })
-  const running = movement.run(7, geometry, { x: -700, y: 250 })
+  const running = movement.run(7, geometry, { target: { x: -700, y: 250 }, facing: 'right', steps: 15 })
   await started
   movement.stop(); resolveStep(); await running
   assert.equal(steps.length, 1); assert.deepEqual(cancelled, [7]); assert.equal(movement.activeId, null)
+})
+test('a walk faces the travel direction and refuses a trip shorter than one step', () => {
+  const right = planPetWalk(geometry, 90, clampPetPoint)
+  assert.equal(right.facing, 'right'); assert.equal(right.steps, 15); assert.equal(right.target.x, -710)
+  assert.equal(planPetWalk(geometry, -120, clampPetPoint).facing, 'left')
+  assert.equal(planPetWalk(geometry, 8, clampPetPoint), null)
+  assert.equal(planPetWalk({ ...geometry, position: { x: -228, y: 250 } }, 400, clampPetPoint), null)
+})
+test('clip choice fades between named actions and keeps rest as a single hold', () => {
+  assert.equal(PET_CROSSFADE_SECONDS, 0.28)
+  assert.equal(clipForMood('resting', 'walk'), 'rest')
+  assert.equal(clipForMood('idle', 'walk'), 'walk')
+  assert.equal(clipForMood('happy', 'look'), 'happy')
+  assert.equal(resolveClip('walk', ['idle', 'happy']), 'idle')
+  assert.equal(resolveClip('look', ['idle', 'look']), 'look')
+  assert.equal(clipLoops('rest'), false)
+  assert.equal(clipLoops('walk'), true)
+  assert.throws(() => resolveClip('idle', ['happy']))
 })

@@ -1,4 +1,8 @@
 import type { PetGeometry, Point } from './desktopPetProtocol'
+import { petStepPoint, planPetWalk, type PetFacing, type PetWalk } from './petPerformance.ts'
+
+export { planPetWalk }
+export type { PetFacing, PetWalk }
 
 export function clampPetPoint(point: Point, geometry: Pick<PetGeometry, 'workArea' | 'outerSize'>): Point {
   const { workArea: area, outerSize: size } = geometry
@@ -20,15 +24,15 @@ export function createPetMovement(step: (id: number, point: Point) => Promise<vo
   return {
     stop,
     get activeId() { return active },
-    async run(id: number, geometry: PetGeometry, target: Point) {
+    async run(id: number, geometry: PetGeometry, walk: PetWalk) {
       stop(); active = id
       try {
-        for (let index = 1; index <= 15 && active === id; index++) {
+        for (let index = 1; index <= walk.steps && active === id; index++) {
           await new Promise<void>(resolve => { release = resolve; timer = setTimeout(resolve, 100) })
           release = undefined
           if (active !== id) return
-          const point = clampPetPoint({ x: geometry.position.x + (target.x - geometry.position.x) * index / 15, y: geometry.position.y + (target.y - geometry.position.y) * index / 15 }, geometry)
-          await step(id, point)
+          const raw = petStepPoint(geometry.position, walk.target, index, walk.steps)
+          await step(id, clampPetPoint(raw, geometry))
         }
       } finally { if (active === id) stop() }
     },

@@ -4,13 +4,14 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { PetFigure } from './PetFigure'
 import { acceptSnapshot, PET_NATIVE_EVENT, PET_RESULT_EVENT, PET_SNAPSHOT_EVENT, PET_VISIBILITY_EVENT } from './desktopPetProtocol'
 import type { PetAction, PetActionResult, PetGeometry, PetIntent, PetNativeEvent, PetSnapshot } from './desktopPetProtocol'
-import { clampPetPoint, createPetMovement } from './desktopPetMotion'
+import { clampPetPoint, createPetMovement, planPetWalk, type PetFacing } from './desktopPetMotion'
 import './desktop-pet.css'
 
 export default function DesktopPet() {
   const [snapshot, setSnapshot] = useState<PetSnapshot | null>(null), [visible, setVisible] = useState(false)
   const [menu, setMenu] = useState(false), [hovered, setHovered] = useState(false), [rest, setRest] = useState(false), [autoRest, setAutoRest] = useState(false)
   const [happy, setHappy] = useState(false), [moving, setMoving] = useState(false), [looking, setLooking] = useState(false), [dragging, setDragging] = useState(false), [busy, setBusy] = useState(false)
+  const [facing, setFacing] = useState<PetFacing>('right')
   const [notice, setNotice] = useState(false), [error, setError] = useState(''), [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [decision, setDecision] = useState(0)
   const snapshotRef = useRef(snapshot); snapshotRef.current = snapshot
@@ -144,7 +145,10 @@ export default function DesktopPet() {
           if (cancelled) { await invoke('pet_move_cancel', { movementId: segment.movementId }); return }
           setMoving(true)
           const distance = (60 + Math.random() * 30) * segment.geometry.scaleFactor * (Math.random() < .5 ? -1 : 1)
-          await movement.current.run(segment.movementId, segment.geometry, clampPetPoint({ x: segment.geometry.position.x + distance, y: segment.geometry.position.y }, segment.geometry))
+          const walk = planPetWalk(segment.geometry, distance, clampPetPoint)
+          if (!walk) { await invoke('pet_move_cancel', { movementId: segment.movementId }); return }
+          setFacing(walk.facing)
+          await movement.current.run(segment.movementId, segment.geometry, walk)
         } catch { if (!cancelled) setError('当前暂不能活动') }
         finally { if (mounted.current) { setMoving(false); setDecision(value => value + 1) } }
       })()
@@ -215,7 +219,7 @@ export default function DesktopPet() {
           if (p && !p.started) { setRest(false); setAutoRest(false); setHappy(true); setError(''); void inspectDrag() }
           pointer.current = null
         }}>
-        <PetFigure appearance={snapshot.appearance} mood={dragging ? 'dragging' : rest || autoRest ? 'resting' : happy ? 'happy' : 'idle'} animate={animate} activity={moving ? 'walk' : looking ? 'look' : undefined} onError={() => setError('三维暂不可用，已显示静态伙伴')}/>
+        <PetFigure appearance={snapshot.appearance} mood={dragging ? 'dragging' : rest || autoRest ? 'resting' : happy ? 'happy' : 'idle'} animate={animate} activity={moving ? 'walk' : looking ? 'look' : undefined} facing={facing} onError={() => setError('三维暂不可用，已显示静态伙伴')}/>
       </div>
       <button ref={moreButton} className="desktop-pet-more" aria-label="伙伴更多操作" aria-expanded={menu} onClick={() => { stop(); setMenu(value => !value); void inspectDrag() }}>···</button>
       {menu && <div className="desktop-pet-menu" aria-label="伙伴操作"><button disabled={busy} onClick={() => action('quick-note')}>快记</button><button disabled={busy} onClick={() => action('open-todos')}>待办</button><button onClick={() => { stop(); setAutoRest(false); setRest(value => !value); setMenu(false) }}>{rest ? '唤醒' : '休息'}</button><button disabled={busy} onClick={() => action('hide')}>收起</button></div>}

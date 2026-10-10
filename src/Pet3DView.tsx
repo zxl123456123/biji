@@ -3,17 +3,18 @@ import type { ReactNode } from 'react'
 import type { PetAppearance } from './petAppearance'
 import type { PetMood } from './petBehavior'
 import type { Pet3DScene, PetActivity, PetDecoration } from './Pet3DScene'
+import type { PetFacing } from './petPerformance.ts'
 
-export function Pet3DView({ appearance, mood, animate, activity, modelUrl, original, fallback, onError, onLoaded }: {
+export function Pet3DView({ appearance, mood, animate, activity, facing = 'right', modelUrl, original, fallback, onError, onLoaded }: {
   appearance: PetAppearance; mood: PetMood; animate: boolean; modelUrl: string; original: boolean
-  activity?: PetActivity; fallback: ReactNode; onError?(message: string): void; onLoaded?(decorations: readonly PetDecoration[]): void
+  activity?: PetActivity; facing?: PetFacing; fallback: ReactNode; onError?(message: string): void; onLoaded?(decorations: readonly PetDecoration[]): void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const scene = useRef<Pet3DScene | null>(null)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
-  const latest = useRef({ appearance, mood, animate, activity, onError, onLoaded })
-  latest.current = { appearance, mood, animate, activity, onError, onLoaded }
+  const latest = useRef({ appearance, mood, animate, activity, facing, onError, onLoaded })
+  latest.current = { appearance, mood, animate, activity, facing, onError, onLoaded }
 
   useEffect(() => {
     const element = canvas.current!
@@ -44,6 +45,7 @@ export function Pet3DView({ appearance, mood, animate, activity, modelUrl, origi
       if (cancelled || unusable) { next.dispose(); return }
       scene.current = next
       next.setAppearance(latest.current.appearance)
+      next.setFacing(latest.current.facing)
       next.setMood(latest.current.mood, latest.current.activity)
       observer = new ResizeObserver(() => {
         const bounds = element.getBoundingClientRect()
@@ -67,6 +69,7 @@ export function Pet3DView({ appearance, mood, animate, activity, modelUrl, origi
 
   useEffect(() => { scene.current?.setAppearance(appearance) }, [appearance])
   useEffect(() => { scene.current?.setMood(mood, activity) }, [mood, activity])
+  useEffect(() => { scene.current?.setFacing(facing) }, [facing])
   useEffect(() => { scene.current?.setAnimate(animate) }, [animate])
 
   return <span className="pet-3d-view" data-ready={ready && !failed}>
