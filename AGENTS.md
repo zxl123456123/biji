@@ -14,7 +14,8 @@
 
 ## 代码入口
 
-- `src/App.tsx`：界面、笔记编辑器、账本及 AI 面板。
+- `src/main.tsx`：按浏览器、桌面主窗和桌面伙伴窗分流。
+- `src/App.tsx`：主窗状态、八个页面分流和弹层挂载；编辑器、账本与伙伴本体在各自文件。
 - `src/styles.css`：主题、布局、响应式与交互动效。
 - `src/store.ts`：浏览器本地存储、备份与迁移。
 - `src/desktop.ts`：Tauri 数据与 AI 桥接。
@@ -32,6 +33,7 @@
 - `docs/Note.Ordering.md`：同分区排序、独立置顶区、唯一数组顺序、SQLite/备份兼容和旧EXE降级写入限制。
 - `docs/Search.Experience.md`：统一可见正文/标签查找、首命中摘要、字形高亮与内存缓存边界。
 - `docs/current/celestial-note-wheel/`：十二个月记录年轮的当前方案与验证；`docs/Spatial.Experience.md`：旧 3D 空间历史文档的归档入口。
+- `docs/Code.Entry.md`：启动分流、主窗页面和伙伴文件职责。
 - `docs/Pet.Wardrobe.md`：五角色、免费试穿与已应用外观、共享画像及局部动态许可。
 - `docs/Note.Attachments.md`：本机图片和文件附件、大小限制、IndexedDB/SQLite 兼容及旧版回写限制。
 - `docs/Release.Verification.0.9.0.md` 至 `docs/Release.Verification.0.9.3.md`：0.9.x 制品身份、已测和未测边界。
